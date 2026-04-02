@@ -1,0 +1,20 @@
+import { ModeProvider } from "../context/mode";
+import { TopNav } from "../components/TopNav";
+import { Web3Providers } from "../components/Web3Providers";
+import "./globals.css";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <ModeProvider defaultMode="dex">
+          <Web3Providers>
+            <TopNav />
+            {children}
+          </Web3Providers>
+        </ModeProvider>
+      </body>
+    </html>
+  );
+}
+

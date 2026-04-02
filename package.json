@@ -1,0 +1,21 @@
+{
+  "name": "lidex",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "npm@10.0.0",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "contracts",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "npm -w frontend run dev",
+    "dev:frontend": "npm -w frontend run dev",
+    "dev:backend": "npm -w backend run dev",
+    "test": "npm -w frontend test --if-present && npm -w backend test --if-present && npm -w contracts test --if-present"
+  },
+  "dependencies": {
+    "lightweight-charts": "^5.1.0"
+  }
+}
