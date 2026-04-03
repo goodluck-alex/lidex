@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { Grid, PageShell, Pill, Span, Card, Button } from "../../components/ui";
 import {
+  BalancesPanel,
   ChartPanel,
   DEFAULT_TRADE_CHART_SYMBOL,
   OpenOrdersPanel,
@@ -11,29 +12,31 @@ import {
   PairHeader,
   TradeHistoryPanel
 } from "./components/Panels";
+import { TradeUiProvider } from "./components/TradeUiContext";
 
 export default function TradePage() {
-  const [mobilePanel, setMobilePanel] = useState<"chart" | "orderbook" | "order" | "orders" | "history">("chart");
+  const [mobilePanel, setMobilePanel] = useState<"chart" | "orderbook" | "balances" | "order" | "orders" | "history">("chart");
   const mobileTabs = useMemo(
     () =>
       [
         { id: "chart", label: "Chart" },
         { id: "orderbook", label: "Orderbook" },
+        { id: "balances", label: "Balances" },
         { id: "order", label: "Order" },
-        { id: "orders", label: "Open Orders" },
+        { id: "orders", label: "Orders" },
         { id: "history", label: "History" }
       ] as const,
     []
   );
 
   return (
+    <TradeUiProvider>
     <PageShell title="Trade" subtitle="CEX Full dashboard (desktop 3-column, mobile tabs).">
-      <Card title="Phase 1 note" right={<Pill tone="info">CEX foundation</Pill>}>
+      <Card title="CEX matcher" right={<Pill tone="success">Phase 3</Pill>}>
         <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.6 }}>
-          This Trade page is a <b>foundation UI</b> only in Phase 1. It does <b>not</b> use 0x (0X/OX) or execute real trades yet.
-          <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-            Phase 2 will connect this to the internal orderbook / matching engine and custodial balances.
-          </div>
+          Limit orders hit an <b>internal matcher</b> for the pair configured on the API (default <code>LDX/USDT</code>).{" "}
+          <b>No 0x</b> on this path. Sign in on the Wallet page. Paper money: <code>CEX_DEV_FUNDING=true</code> (quick credit) and/or{" "}
+          <code>CEX_PAPER_TRANSFERS=true</code> (simulated deposit/withdraw with <code>/v1/cex/ledger</code> audit).
         </div>
       </Card>
       <Card title={DEFAULT_TRADE_CHART_SYMBOL} right={<Pill tone="info">Orderbook</Pill>}>
@@ -72,6 +75,7 @@ export default function TradePage() {
             <Span col={12}>
               {mobilePanel === "chart" ? <ChartPanel symbol={DEFAULT_TRADE_CHART_SYMBOL} /> : null}
               {mobilePanel === "orderbook" ? <OrderbookPanel /> : null}
+              {mobilePanel === "balances" ? <BalancesPanel /> : null}
               {mobilePanel === "order" ? <OrderEntryPanel /> : null}
               {mobilePanel === "orders" ? <OpenOrdersPanel /> : null}
               {mobilePanel === "history" ? <TradeHistoryPanel /> : null}
@@ -94,7 +98,10 @@ export default function TradePage() {
             </Span>
 
             <Span col={3}>
-              <OrderEntryPanel />
+              <BalancesPanel />
+              <div style={{ marginTop: 12 }}>
+                <OrderEntryPanel />
+              </div>
               <div style={{ marginTop: 12 }}>
                 <TradeHistoryPanel />
               </div>
@@ -103,6 +110,7 @@ export default function TradePage() {
         </div>
       </div>
     </PageShell>
+    </TradeUiProvider>
   );
 }
 

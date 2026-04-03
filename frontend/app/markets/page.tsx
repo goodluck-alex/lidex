@@ -1,26 +1,90 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useMode } from "../../context/mode";
 import { Card, Grid, PageShell, Pill, Span } from "../../components/ui";
 import { ResponsivePanels } from "../../components/ResponsivePanels";
 import { apiGet } from "../../services/api";
 import { CandlesChart, type Candle } from "../../components/CandlesChart";
+import { chainName } from "../../utils/chains";
 
-function Row({ symbol, price, change, volume }: { symbol: string; price: string; change: string; volume: string }) {
+type MarketTokenMeta = { symbol: string; name: string; logoUrl: string | null };
+
+const LDX_PAIR_META: MarketTokenMeta = { symbol: "LDX", name: "Lidex", logoUrl: "/lidex-logo.png" };
+
+function MiniAvatar({ url }: { url: string | null }) {
+  if (!url) {
+    return (
+      <div
+        aria-hidden
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 999,
+          background: "rgba(255,255,255,0.08)",
+          flexShrink: 0
+        }}
+      />
+    );
+  }
+  return (
+    <img src={url} alt="" width={22} height={22} style={{ borderRadius: 999, objectFit: "cover", flexShrink: 0 }} />
+  );
+}
+
+function Row({
+  title,
+  baseToken,
+  quoteToken,
+  price,
+  change,
+  volume
+}: {
+  title: string;
+  baseToken?: MarketTokenMeta | null;
+  quoteToken?: MarketTokenMeta | null;
+  price: string;
+  change: string;
+  volume: string;
+}) {
   const isUp = change.trim().startsWith("+");
+  const subtitle = baseToken && quoteToken ? `${baseToken.name} · ${quoteToken.name}` : null;
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "1.2fr 1fr 1fr 1fr",
+        gridTemplateColumns: "minmax(168px, 1.5fr) 1fr 1fr 1fr",
         gap: 10,
         padding: "10px 0",
         borderBottom: "1px solid rgba(255,255,255,0.06)",
-        fontSize: 13
+        fontSize: 13,
+        alignItems: "center"
       }}
     >
-      <div style={{ fontWeight: 700 }}>{symbol}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+          <MiniAvatar url={baseToken?.logoUrl ?? null} />
+          <MiniAvatar url={quoteToken?.logoUrl ?? null} />
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 700 }}>{title}</div>
+          {subtitle ? (
+            <div
+              style={{
+                fontSize: 11,
+                opacity: 0.62,
+                marginTop: 2,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis"
+              }}
+            >
+              {subtitle}
+            </div>
+          ) : null}
+        </div>
+      </div>
       <div style={{ opacity: 0.9 }}>{price}</div>
       <div style={{ color: isUp ? "#00C896" : "#ff6b6b", fontWeight: 700 }}>{change}</div>
       <div style={{ opacity: 0.75 }}>{volume}</div>
@@ -28,7 +92,23 @@ function Row({ symbol, price, change, volume }: { symbol: string; price: string;
   );
 }
 
-type Pair = { symbol: string; base: string; quote: string; status: "active" | "coming_soon" };
+const rowHeadGrid: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(168px, 1.5fr) 1fr 1fr 1fr",
+  gap: 10,
+  fontSize: 12,
+  opacity: 0.7,
+  paddingBottom: 8
+};
+
+type Pair = {
+  symbol: string;
+  base: string;
+  quote: string;
+  status: "active" | "coming_soon";
+  baseToken?: MarketTokenMeta;
+  quoteToken?: MarketTokenMeta;
+};
 type PairsResponse = { ok: true; active: Pair[]; comingSoon: Pair[] };
 type Stat = { symbol: string; price: number; change24hPct: number; volume24hQuote: number; updatedAt: number };
 type StatsResponse = { ok: true; items: Stat[]; bySymbol: Record<string, Stat>; updatedAt: number };
@@ -97,6 +177,11 @@ export default function MarketsPage() {
   const [pairs, setPairs] = useState<PairsResponse | null>(null);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [listingsChainId, setListingsChainId] = useState<number>(56);
+  const [listedTokens, setListedTokens] = useState<
+    { symbol: string; address: string; decimals: number; featured: boolean; name?: string; logoUrl?: string | null }[] | null
+  >(null);
+  const [listedTokensErr, setListedTokensErr] = useState<string | null>(null);
   const userKey = useMemo(() => "phase1", []);
   const [selected, setSelected] = useState<string>("ETH/USDT");
   const [candles, setCandles] = useState<CandlesResponse | null>(null);
@@ -123,6 +208,36 @@ export default function MarketsPage() {
       cancelled = true;
     };
   }, [userKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setListedTokensErr(null);
+        const res = await apiGet<{
+          ok: true;
+          chainId: number;
+          tokens: {
+            symbol: string;
+            address: string;
+            decimals: number;
+            featured: boolean;
+            name?: string;
+            logoUrl?: string | null;
+          }[];
+        }>(`/v1/tokens/list?chainId=${Number(listingsChainId)}`);
+        if (cancelled) return;
+        setListedTokens(res.tokens || []);
+      } catch (e) {
+        if (cancelled) return;
+        setListedTokens(null);
+        setListedTokensErr(e instanceof Error ? e.message : "Failed to load listed tokens");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [listingsChainId]);
 
   useEffect(() => {
     if (!isCex) {
@@ -168,7 +283,7 @@ export default function MarketsPage() {
               tone={error ? "danger" : "default"}
             >
               <div style={{ display: "grid" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr", gap: 10, fontSize: 12, opacity: 0.7, paddingBottom: 8 }}>
+                <div style={rowHeadGrid}>
                   <div>Pair</div>
                   <div>Price</div>
                   <div>24h</div>
@@ -177,7 +292,9 @@ export default function MarketsPage() {
                 {(pairs?.comingSoon || []).map((p) => (
                   <Row
                     key={p.symbol}
-                    symbol={`${p.symbol} (Coming Soon)`}
+                    title={`${p.symbol} (Coming Soon)`}
+                    baseToken={p.baseToken}
+                    quoteToken={p.quoteToken}
                     price={fmtPrice(stats?.bySymbol?.[p.symbol]?.price)}
                     change={fmtChangePct(stats?.bySymbol?.[p.symbol]?.change24hPct)}
                     volume={fmtVol(stats?.bySymbol?.[p.symbol]?.volume24hQuote)}
@@ -186,7 +303,9 @@ export default function MarketsPage() {
                 {(pairs?.active || []).map((p) => (
                   <Row
                     key={p.symbol}
-                    symbol={p.symbol}
+                    title={p.symbol}
+                    baseToken={p.baseToken}
+                    quoteToken={p.quoteToken}
                     price={fmtPrice(stats?.bySymbol?.[p.symbol]?.price)}
                     change={fmtChangePct(stats?.bySymbol?.[p.symbol]?.change24hPct)}
                     volume={fmtVol(stats?.bySymbol?.[p.symbol]?.volume24hQuote)}
@@ -195,6 +314,76 @@ export default function MarketsPage() {
                 {error ? (
                   <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>Error: {error}</div>
                 ) : null}
+              </div>
+            </Card>
+          </Span>
+
+          <Span col={12}>
+            <Card title="TOKEN/LDX listings (Coming Soon)" right={<Pill tone="info">Phase 7</Pill>}>
+              <div style={{ display: "grid", gap: 10 }}>
+                <div style={{ fontSize: 12, opacity: 0.75, lineHeight: 1.55 }}>
+                  Approved project tokens are shown here as <b>TOKEN/LDX</b> markets per chain. Liquidity is per-chain (Phase 6 Option A).
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10, alignItems: "center" }}>
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>Chain</div>
+                  <select
+                    value={String(listingsChainId)}
+                    onChange={(e) => setListingsChainId(Number(e.target.value))}
+                    style={{
+                      padding: 10,
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      background: "transparent",
+                      color: "white",
+                      width: "100%",
+                    }}
+                  >
+                    <option value="56">BNB Chain (56)</option>
+                    <option value="1">Ethereum (1)</option>
+                    <option value="137">Polygon (137)</option>
+                    <option value="42161">Arbitrum (42161)</option>
+                    <option value="43114">Avalanche (43114)</option>
+                  </select>
+                </div>
+
+                <div style={{ fontSize: 12, opacity: 0.75 }}>
+                  Showing: <b>{chainName(listingsChainId)}</b>
+                </div>
+
+                {listedTokensErr ? <div style={{ fontSize: 12, opacity: 0.8 }}>Error: {listedTokensErr}</div> : null}
+                {!listedTokens ? (
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>Loading…</div>
+                ) : listedTokens.length === 0 ? (
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>No approved tokens yet for this chain.</div>
+                ) : (
+                  <div style={{ display: "grid" }}>
+                    <div style={rowHeadGrid}>
+                      <div>Pair</div>
+                      <div>Price</div>
+                      <div>24h</div>
+                      <div>Volume</div>
+                    </div>
+                    {listedTokens.map((t) => (
+                      <Row
+                        key={`${t.symbol}-${t.address}`}
+                        title={`${t.symbol}/LDX (Coming Soon)`}
+                        baseToken={{
+                          symbol: t.symbol,
+                          name: t.name || t.symbol,
+                          logoUrl: t.logoUrl ?? null
+                        }}
+                        quoteToken={LDX_PAIR_META}
+                        price="—"
+                        change="—"
+                        volume="—"
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ fontSize: 12, opacity: 0.75 }}>
+                  Want to list? Submit at <b>/listings/apply</b>. Pairing with <b>LDX</b> qualifies for free listing incentives.
+                </div>
               </div>
             </Card>
           </Span>
@@ -212,7 +401,7 @@ export default function MarketsPage() {
                 {active === "list" ? (
                   <Card title="Markets" right={<Pill tone="info">{error ? "Error" : "Pairs"}</Pill>} tone={error ? "danger" : "default"}>
                     <div style={{ display: "grid" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr", gap: 10, fontSize: 12, opacity: 0.7, paddingBottom: 8 }}>
+                      <div style={rowHeadGrid}>
                         <div>Pair</div>
                         <div>Price</div>
                         <div>24h</div>
@@ -221,7 +410,9 @@ export default function MarketsPage() {
                       {(pairs?.comingSoon || []).map((p) => (
                         <Row
                           key={p.symbol}
-                          symbol={`${p.symbol} (Coming Soon)`}
+                          title={`${p.symbol} (Coming Soon)`}
+                          baseToken={p.baseToken}
+                          quoteToken={p.quoteToken}
                           price={fmtPrice(stats?.bySymbol?.[p.symbol]?.price)}
                           change={fmtChangePct(stats?.bySymbol?.[p.symbol]?.change24hPct)}
                           volume={fmtVol(stats?.bySymbol?.[p.symbol]?.volume24hQuote)}
@@ -230,7 +421,9 @@ export default function MarketsPage() {
                       {(pairs?.active || []).map((p) => (
                         <Row
                           key={p.symbol}
-                          symbol={p.symbol}
+                          title={p.symbol}
+                          baseToken={p.baseToken}
+                          quoteToken={p.quoteToken}
                           price={fmtPrice(stats?.bySymbol?.[p.symbol]?.price)}
                           change={fmtChangePct(stats?.bySymbol?.[p.symbol]?.change24hPct)}
                           volume={fmtVol(stats?.bySymbol?.[p.symbol]?.volume24hQuote)}
@@ -252,7 +445,7 @@ export default function MarketsPage() {
                           ? `Error: ${candlesError}`
                           : candles
                             ? `Interval: ${candles.interval} • ${candles.candles.length} bars • ${
-                                candles.source === "binance" ? "Binance spot" : candles.source === "synthetic" ? "Demo" : "Live"
+                                candles.source === "binance" ? "Lidex" : candles.source === "synthetic" ? "Demo" : "Live"
                               }`
                             : "Loading candles..."}
                       </div>
@@ -276,7 +469,7 @@ export default function MarketsPage() {
             <Span col={8}>
               <Card title="Markets" right={<Pill tone="info">{error ? "Error" : "Pairs"}</Pill>} tone={error ? "danger" : "default"}>
                 <div style={{ display: "grid" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr", gap: 10, fontSize: 12, opacity: 0.7, paddingBottom: 8 }}>
+                  <div style={rowHeadGrid}>
                     <div>Pair</div>
                     <div>Price</div>
                     <div>24h</div>
@@ -285,7 +478,9 @@ export default function MarketsPage() {
                   {(pairs?.comingSoon || []).map((p) => (
                     <Row
                       key={p.symbol}
-                      symbol={`${p.symbol} (Coming Soon)`}
+                      title={`${p.symbol} (Coming Soon)`}
+                      baseToken={p.baseToken}
+                      quoteToken={p.quoteToken}
                       price={fmtPrice(stats?.bySymbol?.[p.symbol]?.price)}
                       change={fmtChangePct(stats?.bySymbol?.[p.symbol]?.change24hPct)}
                       volume={fmtVol(stats?.bySymbol?.[p.symbol]?.volume24hQuote)}
@@ -294,7 +489,9 @@ export default function MarketsPage() {
                   {(pairs?.active || []).map((p) => (
                     <Row
                       key={p.symbol}
-                      symbol={p.symbol}
+                      title={p.symbol}
+                      baseToken={p.baseToken}
+                      quoteToken={p.quoteToken}
                       price={fmtPrice(stats?.bySymbol?.[p.symbol]?.price)}
                       change={fmtChangePct(stats?.bySymbol?.[p.symbol]?.change24hPct)}
                       volume={fmtVol(stats?.bySymbol?.[p.symbol]?.volume24hQuote)}
@@ -316,7 +513,7 @@ export default function MarketsPage() {
                       ? `Error: ${candlesError}`
                       : candles
                         ? `Interval: ${candles.interval} • ${
-                            candles.source === "binance" ? "Binance spot" : candles.source === "synthetic" ? "Demo" : "Live"
+                            candles.source === "binance" ? "Lidex" : candles.source === "synthetic" ? "Demo" : "Live"
                           }`
                         : "Loading candles..."}
                   </div>

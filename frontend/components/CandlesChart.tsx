@@ -16,7 +16,7 @@ export type Candle = { time: number; open: number; high: number; low: number; cl
 type Props = { candles: Candle[]; height: number };
 
 /**
- * Candlestick chart (lightweight-charts v5). Styling aligned with the “Lidex / Binance-style”
+ * Candlestick chart (lightweight-charts v5). Styling aligned with Lidex-style
  * dark theme; data comes from your API (`time` = Unix seconds).
  */
 export function CandlesChart({ candles, height }: Props) {

@@ -1,23 +1,33 @@
 const crypto = require("crypto");
-
-const sessions = new Map(); // sessionId -> { userAddress, createdAt }
+const { prisma } = require("../../lib/prisma");
 
 const COOKIE_NAME = "lidex_session";
+const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days (matches cookie maxAge)
 
-function createSession(userAddress) {
+async function createSession(userAddress) {
   const sessionId = crypto.randomBytes(24).toString("hex");
-  sessions.set(sessionId, { userAddress: String(userAddress).toLowerCase(), createdAt: Date.now() });
+  const addr = String(userAddress).toLowerCase();
+  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS);
+  await prisma.authSession.create({
+    data: { id: sessionId, userAddress: addr, expiresAt },
+  });
   return sessionId;
 }
 
-function getSession(sessionId) {
+async function getSession(sessionId) {
   if (!sessionId) return null;
-  return sessions.get(sessionId) || null;
+  const row = await prisma.authSession.findUnique({ where: { id: sessionId } });
+  if (!row) return null;
+  if (row.expiresAt.getTime() <= Date.now()) {
+    await prisma.authSession.delete({ where: { id: sessionId } }).catch(() => {});
+    return null;
+  }
+  return { userAddress: row.userAddress, createdAt: row.createdAt.getTime() };
 }
 
-function destroySession(sessionId) {
+async function destroySession(sessionId) {
   if (!sessionId) return;
-  sessions.delete(sessionId);
+  await prisma.authSession.deleteMany({ where: { id: sessionId } });
 }
 
 function cookieSecureFlag() {
@@ -32,7 +42,7 @@ function cookieOptions() {
     sameSite: "lax",
     secure: cookieSecureFlag(),
     path: "/",
-    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    maxAge: SESSION_MAX_AGE_MS,
   };
   if (process.env.COOKIE_DOMAIN) {
     opts.domain = process.env.COOKIE_DOMAIN;
@@ -56,4 +66,3 @@ module.exports = {
   cookieOptions,
   clearCookieOptions,
 };
-

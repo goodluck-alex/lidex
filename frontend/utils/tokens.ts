@@ -1,11 +1,28 @@
 export type ChainId = 1 | 56 | 137 | 42161 | 43114;
-export type TokenPreset = { symbol: string; address: string; decimals: number };
+export type TokenPreset = {
+  symbol: string;
+  address: string;
+  decimals: number;
+  name?: string;
+  logoUrl?: string | null;
+};
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { TOKENS: SHARED_TOKENS } = require("@lidex/shared");
+const { TOKENS: SHARED_TOKENS, TOKEN_DISPLAY } = require("@lidex/shared") as {
+  TOKENS: { phase1: Record<number, Record<string, { symbol: string; address: string; decimals: number }>> };
+  TOKEN_DISPLAY: Record<string, { name: string; logoUrl: string | null }>;
+};
 
-function asList(chainTokens: Record<string, TokenPreset>) {
-  return Object.values(chainTokens);
+function asList(chainTokens: Record<string, { symbol: string; address: string; decimals: number }>): TokenPreset[] {
+  return Object.values(chainTokens).map((t) => {
+    const sym = String(t.symbol).toUpperCase();
+    const d = TOKEN_DISPLAY[sym];
+    return {
+      ...t,
+      name: d?.name || t.symbol,
+      logoUrl: d?.logoUrl != null ? d.logoUrl : null
+    };
+  });
 }
 
 export const TOKENS: Record<ChainId, TokenPreset[]> = {

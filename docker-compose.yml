@@ -1,0 +1,15 @@
+# Local Postgres for Prisma (optional). Align POSTGRES_* with backend/.env DATABASE_URL.
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: lidex
+    volumes:
+      - lidex_pgdata:/var/lib/postgresql/data
+
+volumes:
+  lidex_pgdata:

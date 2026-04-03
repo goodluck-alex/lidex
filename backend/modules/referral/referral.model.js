@@ -1,3 +1,8 @@
+function publicAppOrigin() {
+  const raw = process.env.APP_PUBLIC_URL || process.env.FRONTEND_URL || "http://localhost:3001";
+  return String(raw).replace(/\/$/, "");
+}
+
 function codeForAddress(address) {
   // Phase 1: referral code is just the wallet address (lowercased).
   // You can replace later with short codes.
@@ -7,7 +12,8 @@ function codeForAddress(address) {
 function linkForUser(user) {
   const address = user?.address || user?.id || "guest";
   const code = codeForAddress(address);
-  return `http://localhost:3001/?ref=${encodeURIComponent(code)}`;
+  const base = publicAppOrigin();
+  return `${base}/?ref=${encodeURIComponent(code)}`;
 }
 
 function emptyStats() {
@@ -23,5 +29,5 @@ function emptyStats() {
   };
 }
 
-module.exports = { codeForAddress, linkForUser, emptyStats };
+module.exports = { codeForAddress, linkForUser, emptyStats, publicAppOrigin };
 

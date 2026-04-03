@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useAccount, useDisconnect, useSwitchChain } from "wagmi";
 import type { Eip1193Provider } from "./provider";
@@ -33,6 +33,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const { openConnectModal } = useConnectModal();
   const [provider, setProvider] = useState<Eip1193Provider | null>(null);
   const [user, setUser] = useState<{ id?: string; address?: string } | null>(null);
+  const wasConnectedRef = useRef(false);
 
   useEffect(() => {
     if (!connector) {
@@ -64,6 +65,50 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
+  /** Wallet connected but cookie session is for a different address — invalidate session. */
+  useEffect(() => {
+    if (isConnecting || isReconnecting) return;
+    if (status !== "connected" || !address || !user?.address) return;
+    const a = String(address).toLowerCase();
+    const u = String(user.address).toLowerCase();
+    if (a === u) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await apiLogout();
+      } catch {
+        /* ignore */
+      }
+      if (!cancelled) setUser(null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, address, user?.address, isConnecting, isReconnecting]);
+
+  /** RainbowKit / wagmi disconnect — clear API session so cookie matches “no wallet”. */
+  useEffect(() => {
+    if (isConnecting || isReconnecting) return;
+    const connected = status === "connected" && !!address;
+    const wasConnected = wasConnectedRef.current;
+    wasConnectedRef.current = connected;
+
+    if (!wasConnected || connected || !user) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        await apiLogout();
+      } catch {
+        /* ignore */
+      }
+      if (!cancelled) setUser(null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, address, user, isConnecting, isReconnecting]);
+
   const statusOut: WalletState["status"] = useMemo(() => {
     if (typeof window === "undefined") return "idle";
     if (isConnecting || isReconnecting) return "idle";
@@ -81,6 +126,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     };
 
     const disconnect = async () => {
+      try {
+        await apiLogout();
+      } catch {
+        /* still drop wallet connection */
+      }
+      setUser(null);
       await disconnectAsync();
     };
 

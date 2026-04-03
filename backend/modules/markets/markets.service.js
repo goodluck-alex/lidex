@@ -4,17 +4,17 @@ const marketsCandles = require("./markets.candles");
 const { fetchKlines } = require("./markets.binanceKlines");
 
 async function pairs() {
-  return { ok: true, ...marketsModel.listPairs() };
+  return { ok: true, ...(await marketsModel.listPairs()) };
 }
 
 async function stats() {
-  const listed = marketsModel.listPairs();
+  const listed = await marketsModel.listPairs();
   const { items, bySymbol } = marketsStats.buildStats(listed);
   return { ok: true, items, bySymbol, updatedAt: Date.now() };
 }
 
 async function candles({ symbol, interval, limit }) {
-  const listed = marketsModel.listPairs();
+  const listed = await marketsModel.listPairs();
   const { bySymbol } = marketsStats.buildStats(listed);
   const s = String(symbol || "");
   if (!s) return { ok: false, error: "symbol is required" };

@@ -8,7 +8,15 @@ import { Button, Card, Grid, PageShell, Pill, Span } from "../components/ui";
 import { setRefCode } from "../wallet/referral";
 import { apiGet } from "../services/api";
 
-type Pair = { symbol: string; base: string; quote: string; status: "active" | "coming_soon" };
+type MarketTokenMeta = { symbol: string; name: string; logoUrl: string | null };
+type Pair = {
+  symbol: string;
+  base: string;
+  quote: string;
+  status: "active" | "coming_soon";
+  baseToken?: MarketTokenMeta;
+  quoteToken?: MarketTokenMeta;
+};
 type PairsResponse = { ok: true; active: Pair[]; comingSoon: Pair[] };
 type Stat = { symbol: string; price: number; change24hPct: number; volume24hQuote: number; updatedAt: number };
 type StatsResponse = { ok: true; items: Stat[]; bySymbol: Record<string, Stat>; updatedAt: number };
@@ -199,7 +207,20 @@ export default function HomePage() {
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                      <div style={{ fontWeight: 900 }}>{p.symbol}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                        {p.baseToken?.logoUrl ? (
+                          <img src={p.baseToken.logoUrl} alt="" width={24} height={24} style={{ borderRadius: 999, flexShrink: 0 }} />
+                        ) : null}
+                        {p.quoteToken?.logoUrl ? (
+                          <img src={p.quoteToken.logoUrl} alt="" width={24} height={24} style={{ borderRadius: 999, flexShrink: 0, marginLeft: -10 }} />
+                        ) : null}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 900 }}>{p.symbol}</div>
+                          {p.baseToken && p.quoteToken ? (
+                            <div style={{ fontSize: 11, opacity: 0.62, marginTop: 2 }}>{p.baseToken.name} · {p.quoteToken.name}</div>
+                          ) : null}
+                        </div>
+                      </div>
                       <div style={{ fontSize: 12, fontWeight: 900, color: up ? "#00C896" : "#ff6b6b" }}>
                         {fmtChangePct(s?.change24hPct)}
                       </div>

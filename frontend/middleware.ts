@@ -1,16 +1,32 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { INTERNAL_ADMIN_COOKIE, verifyInternalAdminCookie } from "./lib/internalAdminSession";
 
 const MODE_COOKIE = "lidex_mode";
 const ONE_YEAR_S = 60 * 60 * 24 * 365;
-const CEX_ONLY_PREFIXES = ["/cex", "/trade", "/staking", "/launchpad"];
+const CEX_ONLY_PREFIXES = ["/cex", "/trade", "/staking", "/launchpad", "/governance", "/margin"];
 
 function isCexOnlyPath(pathname: string) {
   return CEX_ONLY_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  if (pathname.startsWith("/internal-admin")) {
+    const isLogin =
+      pathname === "/internal-admin/login" || pathname.startsWith("/internal-admin/login/");
+    if (!isLogin) {
+      const ok = await verifyInternalAdminCookie(req.cookies.get(INTERNAL_ADMIN_COOKIE)?.value);
+      if (!ok) {
+        const url = req.nextUrl.clone();
+        url.pathname = "/internal-admin/login";
+        url.searchParams.set("next", `${pathname}${req.nextUrl.search}`);
+        return NextResponse.redirect(url);
+      }
+    }
+    return NextResponse.next();
+  }
 
   // Legacy route redirects (keep old links working)
   if (pathname === "/swap" || pathname.startsWith("/swap/")) {
@@ -48,12 +64,17 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
+    "/internal-admin/:path*",
     "/dex/:path*",
     "/swap/:path*",
     "/trade/:path*",
     "/cex/:path*",
     "/staking/:path*",
-    "/launchpad/:path*"
+    "/launchpad/:path*",
+    "/governance",
+    "/governance/:path*",
+    "/margin",
+    "/margin/:path*"
   ]
 };
 

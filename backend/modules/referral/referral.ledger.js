@@ -1,29 +1,85 @@
-const ledger = []; // newest last
+const { prisma } = require("../../lib/prisma");
 
-function add(entry) {
-  ledger.push(entry);
-  return entry;
+function mapEntry(row) {
+  return {
+    id: row.id,
+    chainId: row.chainId,
+    parentAddress: row.parentAddress,
+    childAddress: row.childAddress,
+    feeToken: row.feeToken,
+    integratorFeeAmount: row.integratorFeeAmount,
+    rewardAmount: row.rewardAmount,
+    amountUsd: row.amountUsd,
+    status: row.status,
+    payoutStatus: row.payoutStatus,
+    txHash: row.txHash,
+    confirmedAt: row.confirmedAt ? row.confirmedAt.getTime() : null,
+    payoutTxHash: row.payoutTxHash,
+    paidAt: row.paidAt ? row.paidAt.getTime() : null,
+    createdAt: row.createdAt.getTime(),
+  };
 }
 
-function confirm({ id, txHash }) {
-  const idx = ledger.findIndex((e) => e.id === id);
-  if (idx === -1) return null;
-  ledger[idx] = { ...ledger[idx], txHash: String(txHash), status: "confirmed", confirmedAt: Date.now() };
-  return ledger[idx];
+async function add(entry) {
+  const row = await prisma.referralLedgerEntry.create({
+    data: {
+      id: entry.id,
+      chainId: entry.chainId,
+      parentAddress: entry.parentAddress,
+      childAddress: entry.childAddress,
+      feeToken: entry.feeToken,
+      integratorFeeAmount: entry.integratorFeeAmount,
+      rewardAmount: entry.rewardAmount,
+      amountUsd: entry.amountUsd ?? 0,
+      status: entry.status,
+      payoutStatus: entry.payoutStatus ?? "unpaid",
+    },
+  });
+  return mapEntry(row);
 }
 
-function markPaid({ id, payoutTxHash }) {
-  const idx = ledger.findIndex((e) => e.id === id);
-  if (idx === -1) return null;
-  ledger[idx] = { ...ledger[idx], payoutStatus: "paid", payoutTxHash: payoutTxHash ? String(payoutTxHash) : null, paidAt: Date.now() };
-  return ledger[idx];
+async function confirm({ id, txHash }) {
+  try {
+    const row = await prisma.referralLedgerEntry.update({
+      where: { id },
+      data: {
+        txHash: String(txHash),
+        status: "confirmed",
+        confirmedAt: new Date(),
+      },
+    });
+    return mapEntry(row);
+  } catch (e) {
+    if (e.code === "P2025") return null;
+    throw e;
+  }
 }
 
-function listByUserAddress(addressLower) {
+async function markPaid({ id, payoutTxHash }) {
+  try {
+    const row = await prisma.referralLedgerEntry.update({
+      where: { id },
+      data: {
+        payoutStatus: "paid",
+        payoutTxHash: payoutTxHash ? String(payoutTxHash) : null,
+        paidAt: new Date(),
+      },
+    });
+    return mapEntry(row);
+  } catch (e) {
+    if (e.code === "P2025") return null;
+    throw e;
+  }
+}
+
+async function listByUserAddress(addressLower) {
   if (!addressLower) return [];
   const a = String(addressLower).toLowerCase();
-  return ledger.filter((e) => e.parentAddress === a || e.childAddress === a);
+  const rows = await prisma.referralLedgerEntry.findMany({
+    where: { OR: [{ parentAddress: a }, { childAddress: a }] },
+    orderBy: { createdAt: "asc" },
+  });
+  return rows.map(mapEntry);
 }
 
 module.exports = { add, confirm, markPaid, listByUserAddress };
-

@@ -1,5 +1,7 @@
 # Phase 1 — MVP Launch Plan (Simple Hybrid DEX)
 
+Full multi-phase product vision: [`vision.md`](./vision.md).
+
 ## Goal
 
 Ship a **non-custodial DEX Lite** experience with **external liquidity (0x)** and an **early referral system**, with a clean path to evolve into the full hybrid exchange.
@@ -61,8 +63,8 @@ Backend is used for **tracking + configuration** (not custody).
   - returns basic referral stats and tier payout splits
 
 **Data storage**
-- MVP can be **in-memory** (dev only) with clear interfaces for later DB upgrade.
-- Next step after MVP: Postgres tables for users, referrals, rewards ledger.
+- **Implemented:** PostgreSQL via Prisma (users, referral attachments, ledger, auth sessions). See `backend/prisma/schema.prisma`.
+- **Tracking:** use `docs/phase-1-tracking.md` to confirm Phase 1 before Phase 2.
 
 ## Milestones
 

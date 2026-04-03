@@ -7,14 +7,18 @@ function sessionMiddleware() {
   return (req, res, next) => {
     parse(req, res, () => {
       const sid = req.cookies?.[COOKIE_NAME];
-      const session = getSession(sid);
-      if (session) {
-        req.user = getUserByAddress(session.userAddress) || { address: session.userAddress };
-      }
-      next();
+      Promise.resolve()
+        .then(async () => {
+          const session = await getSession(sid);
+          if (session) {
+            const fullUser = await getUserByAddress(session.userAddress);
+            req.user = fullUser || { address: session.userAddress };
+          }
+        })
+        .then(() => next())
+        .catch(next);
     });
   };
 }
 
 module.exports = { sessionMiddleware };
-

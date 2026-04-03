@@ -7,11 +7,14 @@ import { ResponsivePanels } from "../../components/ResponsivePanels";
 import { apiGet } from "../../services/api";
 import { useWallet } from "../../wallet/useWallet";
 
+type ReferredUser = { address: string; attachedAt: number };
+
 type ReferralStats = {
   direct: number;
   earnedUsd: number;
   level: number;
   tiers?: { level1: number; level2: number; level3: number };
+  referredUsers?: ReferredUser[];
 };
 
 type LedgerEntry = {
@@ -44,11 +47,13 @@ export default function ReferralPage() {
   const [stats, setStats] = useState<ReferralStats | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
+        setLoading(true);
         setError(null);
         const [l, s] = await Promise.all([
           apiGet<ReferralLinkResponse>(`/v1/referral/link`),
@@ -62,6 +67,8 @@ export default function ReferralPage() {
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : "Failed to load referral data");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
@@ -74,13 +81,16 @@ export default function ReferralPage() {
       title="Referral"
       subtitle={isCex ? "CEX Full: levels, bonuses, referred users, staking/trading rewards." : "DEX Lite: link + basic stats."}
     >
+      {loading ? (
+        <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 12 }}>Loading referral data…</div>
+      ) : null}
       {!isCex ? (
         <Grid>
           <Span col={6}>
             <Card title="Your referral link" right={<Pill tone="success">Lite</Pill>}>
               <div style={{ display: "grid", gap: 10 }}>
                 <div style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", fontSize: 13, opacity: 0.9 }}>
-                  {link}
+                  {loading ? "…" : link}
                 </div>
                 {code ? (
                   <div style={{ fontSize: 12, opacity: 0.72 }}>
@@ -88,7 +98,7 @@ export default function ReferralPage() {
                   </div>
                 ) : null}
                 <div style={{ fontSize: 12, opacity: 0.72 }}>
-                  {error ? `Error: ${error}` : "Loaded from backend (Phase 1)."}
+                  {error ? `Error: ${error}` : loading ? "—" : "Loaded from backend (Phase 1)."}
                 </div>
               </div>
             </Card>
@@ -119,8 +129,44 @@ export default function ReferralPage() {
             <Card title="Phase 1 tiers" tone="info" right={<Pill>Referral</Pill>}>
               <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.5 }}>
                 Tier split (example): L1 {formatPct(stats?.tiers?.level1 ?? 0.3)} / L2{" "}
-                {formatPct(stats?.tiers?.level2 ?? 0.1)} / L3 {formatPct(stats?.tiers?.level3 ?? 0.05)}.
+                {formatPct(stats?.tiers?.level2 ?? 0.1)} / L3 {formatPct(stats?.tiers?.level3 ?? 0.05)}. Level bumps
+                from <b>direct referrals</b> who completed attach (3 → L2, 10 → L3).
               </div>
+            </Card>
+          </Span>
+
+          <Span col={12}>
+            <Card title="Direct referrals" right={<Pill tone="success">{stats?.referredUsers?.length ?? 0}</Pill>}>
+              {!stats?.referredUsers?.length ? (
+                <div style={{ fontSize: 13, opacity: 0.8 }}>
+                  No one has used your link and logged in yet. Share your link; when they sign in, they attach as your
+                  direct referral.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 8 }}>
+                  {stats.referredUsers.map((r) => (
+                    <div
+                      key={r.address}
+                      style={{
+                        padding: 10,
+                        borderRadius: 12,
+                        border: "1px solid rgba(255,255,255,0.10)",
+                        fontSize: 12,
+                        opacity: 0.9,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 8
+                      }}
+                    >
+                      <span style={{ fontFamily: "ui-monospace, monospace" }}>
+                        {r.address.slice(0, 8)}…{r.address.slice(-6)}
+                      </span>
+                      <span style={{ opacity: 0.75 }}>{new Date(r.attachedAt).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card>
           </Span>
 
@@ -210,8 +256,27 @@ export default function ReferralPage() {
                 ) : null}
 
                 {active === "users" ? (
-                  <Card title="Referred users" right={<Pill tone="info">Tracking</Pill>}>
-                    <div style={{ fontSize: 13, opacity: 0.8 }}>List placeholder (username, level, volume, rewards).</div>
+                  <Card title="Referred users" right={<Pill tone="info">{stats?.referredUsers?.length ?? 0}</Pill>}>
+                    {!stats?.referredUsers?.length ? (
+                      <div style={{ fontSize: 13, opacity: 0.8 }}>No direct referrals yet.</div>
+                    ) : (
+                      <div style={{ display: "grid", gap: 8 }}>
+                        {stats.referredUsers.map((r) => (
+                          <div
+                            key={r.address}
+                            style={{
+                              padding: 10,
+                              borderRadius: 12,
+                              border: "1px solid rgba(255,255,255,0.10)",
+                              fontSize: 12,
+                              opacity: 0.9
+                            }}
+                          >
+                            {r.address.slice(0, 10)}…{r.address.slice(-8)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </Card>
                 ) : null}
 
@@ -230,8 +295,27 @@ export default function ReferralPage() {
         >
           <Grid>
             <Span col={7}>
-              <Card title="Referred users" right={<Pill tone="info">Tracking</Pill>}>
-                <div style={{ fontSize: 13, opacity: 0.8 }}>List placeholder (username, level, volume, rewards).</div>
+              <Card title="Referred users" right={<Pill tone="info">{stats?.referredUsers?.length ?? 0}</Pill>}>
+                {!stats?.referredUsers?.length ? (
+                  <div style={{ fontSize: 13, opacity: 0.8 }}>No direct referrals yet.</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {stats.referredUsers.map((r) => (
+                      <div
+                        key={r.address}
+                        style={{
+                          padding: 10,
+                          borderRadius: 12,
+                          border: "1px solid rgba(255,255,255,0.10)",
+                          fontSize: 12,
+                          opacity: 0.9
+                        }}
+                      >
+                        {r.address.slice(0, 12)}…{r.address.slice(-10)}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Card>
             </Span>
             <Span col={5}>

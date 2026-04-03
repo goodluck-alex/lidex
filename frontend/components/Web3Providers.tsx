@@ -8,6 +8,7 @@ import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import { WagmiProvider } from "wagmi";
 import { wagmiConfig } from "../wallet/wagmiConfig";
 import { WalletProvider } from "../wallet/useWallet";
+import { ThemeEffect } from "./ThemeEffect";
 
 export function Web3Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
@@ -16,6 +17,7 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider theme={darkTheme({ accentColor: "#00C896", borderRadius: "medium" })}>
+          <ThemeEffect />
           <WalletProvider>{children}</WalletProvider>
         </RainbowKitProvider>
       </QueryClientProvider>

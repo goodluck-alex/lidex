@@ -8,7 +8,15 @@ import { TOKENS, type ChainId } from "../../utils/tokens";
 import { encodeAllowance, encodeApprove, hexToBigInt, maxUint256Hex } from "../../utils/erc20";
 import { chainName, txUrl } from "../../utils/chains";
 import { useWallet } from "../../wallet/useWallet";
-import { lidexModeHeaders } from "../../services/api";
+import { apiGet, apiPost } from "../../services/api";
+import { loadTradingPreferences, saveTradingPreferences } from "../../lib/tradingPreferences";
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { LDX } = require("@lidex/shared") as { LDX: { explorerUrls?: Record<number, string> } };
+const LDX_BSC_EXPLORER = LDX?.explorerUrls?.[56] ?? null;
+
+type QuoteResponse = { ok: true; quote: unknown };
+type ExecuteResponse = { ok: true; tx: { to: string; data: string; value?: string }; referralReward?: { id: string } };
 
 export default function SwapPage() {
   const { mode } = useMode();
@@ -16,7 +24,11 @@ export default function SwapPage() {
 
   const wallet = useWallet();
   const [chainId, setChainId] = useState<ChainId>(56);
-  const presets = useMemo(() => TOKENS[chainId] || [], [chainId]);
+  const [runtimePresets, setRuntimePresets] = useState<{
+    chainId: ChainId;
+    tokens: { symbol: string; address: string; decimals: number; name?: string; logoUrl?: string | null }[];
+  } | null>(null);
+  const presets = useMemo(() => runtimePresets?.chainId === chainId ? runtimePresets.tokens : (TOKENS[chainId] || []), [runtimePresets, chainId]);
   const [sellToken, setSellToken] = useState<string>(TOKENS[56][0].address);
   const [buyToken, setBuyToken] = useState<string>(TOKENS[56][1].address);
   const [sellAmountBase, setSellAmountBase] = useState<string>("0.01");
@@ -33,6 +45,25 @@ export default function SwapPage() {
   const buyPreset = presets.find((t) => t.address.toLowerCase() === buyToken.toLowerCase());
 
   useEffect(() => {
+    let cancelled = false;
+    apiGet<{
+      ok: true;
+      chainId: number;
+      tokens: { symbol: string; address: string; decimals: number; name?: string; logoUrl?: string | null }[];
+    }>(`/v1/tokens/presets?chainId=${chainId}`)
+      .then((r) => {
+        if (cancelled) return;
+        setRuntimePresets({ chainId: r.chainId as ChainId, tokens: r.tokens || [] });
+      })
+      .catch(() => {
+        if (!cancelled) setRuntimePresets(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [chainId]);
+
+  useEffect(() => {
     // If wallet is connected, auto-follow its chainId.
     if (wallet.status !== "connected" || !wallet.chainId) return;
     const cid = wallet.chainId as ChainId;
@@ -43,11 +74,45 @@ export default function SwapPage() {
     if (p[1]) setBuyToken(p[1].address);
     setQuote(null);
     setQuoteError(null);
+    setAllowanceOk(null);
+    setTxHash(null);
+    setSending("idle");
   }, [wallet.status, wallet.chainId]);
+
+  useEffect(() => {
+    setSlippage(loadTradingPreferences().slippageDecimal);
+  }, []);
+
+  useEffect(() => {
+    const onPrefs = (ev: Event) => {
+      const ce = ev as CustomEvent<{ slippageDecimal?: string }>;
+      if (ce.detail?.slippageDecimal) setSlippage(ce.detail.slippageDecimal);
+    };
+    window.addEventListener("lidex-trading-prefs-changed", onPrefs);
+    return () => window.removeEventListener("lidex-trading-prefs-changed", onPrefs);
+  }, []);
 
   const connectedChainSupported = wallet.status !== "connected" || !wallet.chainId ? true : !!TOKENS[wallet.chainId as ChainId];
   const chainMismatch =
     wallet.status === "connected" && wallet.chainId != null && Number(wallet.chainId) !== Number(chainId);
+
+  const showLdxQuickPairs = chainId === 56 && presets.some((t) => t.symbol.toUpperCase() === "LDX");
+
+  function addressForSymbol(sym: string): string | null {
+    const u = sym.toUpperCase();
+    const t = presets.find((p) => p.symbol.toUpperCase() === u);
+    return t?.address ?? null;
+  }
+
+  function setLdxPair(sellSym: string, buySym: string) {
+    const s = addressForSymbol(sellSym);
+    const b = addressForSymbol(buySym);
+    if (!s || !b) return;
+    setSellToken(s);
+    setBuyToken(b);
+    setQuote(null);
+    setQuoteError(null);
+  }
 
   function formatUnits(value: string | number | bigint | null | undefined, decimals: number) {
     if (value === null || value === undefined) return "—";
@@ -87,14 +152,8 @@ export default function SwapPage() {
         slippagePercentage: Number(slippage),
         taker: wallet.address || undefined
       };
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000"}/v1/swap/quote`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json", ...lidexModeHeaders() },
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
-      if (!res.ok || data?.ok === false) throw new Error(data?.error || `Quote failed (${res.status})`);
+      const data = await apiPost<QuoteResponse>("/v1/swap/quote", body);
+      if (data?.ok !== true || data.quote == null) throw new Error("Quote failed");
       setQuote(data.quote);
       setTxHash(null);
     } catch (e) {
@@ -181,14 +240,8 @@ export default function SwapPage() {
         slippagePercentage: Number(slippage),
         taker: wallet.address
       };
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000"}/v1/swap/execute`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json", ...lidexModeHeaders() },
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
-      if (!res.ok || data?.ok === false) throw new Error(data?.error || `Execute failed (${res.status})`);
+      const data = await apiPost<ExecuteResponse>("/v1/swap/execute", body);
+      if (data?.ok !== true || !data.tx) throw new Error("Execute failed");
 
       const tx = data.tx;
       const reward = data.referralReward;
@@ -206,12 +259,7 @@ export default function SwapPage() {
       setTxHash(String(hash));
       if (reward?.id) {
         try {
-          await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000"}/v1/referral/ledger/confirm`, {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json", ...lidexModeHeaders() },
-            body: JSON.stringify({ id: reward.id, txHash: String(hash) })
-          });
+          await apiPost("/v1/referral/ledger/confirm", { id: reward.id, txHash: String(hash) });
         } catch {
           // ignore; ledger can remain pending and be confirmed later
         }
@@ -236,6 +284,13 @@ export default function SwapPage() {
         <Span col={isCex ? 7 : 6}>
           <Card title="Swap" right={<Pill tone="success">{isCex ? "CEX Full" : "DEX Lite"}</Pill>}>
             <div style={{ display: "grid", gap: 10 }}>
+              {chainId === 56 && LDX_BSC_EXPLORER ? (
+                <div style={{ fontSize: 12, opacity: 0.78 }}>
+                  <a href={LDX_BSC_EXPLORER} target="_blank" rel="noopener noreferrer" style={{ color: "#00C896" }}>
+                    LDX token (BscScan)
+                  </a>
+                </div>
+              ) : null}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                 <div style={{ fontSize: 12, opacity: 0.8 }}>
                   Wallet:{" "}
@@ -314,6 +369,9 @@ export default function SwapPage() {
                       if (p[1]) setBuyToken(p[1].address);
                       setQuote(null);
                       setQuoteError(null);
+                      setAllowanceOk(null);
+                      setTxHash(null);
+                      setSending("idle");
                     }}
                     disabled={wallet.status === "connected"}
                     style={{
@@ -338,11 +396,41 @@ export default function SwapPage() {
                   <input
                     value={slippage}
                     onChange={(e) => setSlippage(e.target.value)}
+                    onBlur={() => {
+                      const n = Number(slippage);
+                      if (Number.isFinite(n) && n > 0 && n < 1) saveTradingPreferences({ slippageDecimal: slippage });
+                    }}
                     placeholder="0.005"
                     style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: "white" }}
                   />
                 </div>
               </div>
+
+              {showLdxQuickPairs ? (
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div style={{ fontSize: 12, opacity: 0.82 }}>LDX quick pairs (BSC) — needs AMM + 0x liquidity</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <Button variant="secondary" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setLdxPair("LDX", "USDT")}>
+                      LDX → USDT
+                    </Button>
+                    <Button variant="secondary" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setLdxPair("USDT", "LDX")}>
+                      USDT → LDX
+                    </Button>
+                    <Button variant="secondary" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setLdxPair("LDX", "BNB")}>
+                      LDX → BNB
+                    </Button>
+                    <Button variant="secondary" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setLdxPair("BNB", "LDX")}>
+                      BNB → LDX
+                    </Button>
+                    <Button variant="secondary" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setLdxPair("LDX", "ETH")}>
+                      LDX → ETH
+                    </Button>
+                    <Button variant="secondary" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setLdxPair("ETH", "LDX")}>
+                      ETH → LDX
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div style={{ display: "grid", gap: 6 }}>
@@ -357,8 +445,8 @@ export default function SwapPage() {
                     style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: "white" }}
                   >
                     {presets.map((t) => (
-                      <option key={t.address} value={t.address}>
-                        {t.symbol}
+                      <option key={`sell-${t.symbol}-${t.address}`} value={t.address}>
+                        {t.name && t.name !== t.symbol ? `${t.name} (${t.symbol})` : t.symbol}
                       </option>
                     ))}
                   </select>
@@ -375,8 +463,8 @@ export default function SwapPage() {
                     style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: "white" }}
                   >
                     {presets.map((t) => (
-                      <option key={t.address} value={t.address}>
-                        {t.symbol}
+                      <option key={`buy-${t.symbol}-${t.address}`} value={t.address}>
+                        {t.name && t.name !== t.symbol ? `${t.name} (${t.symbol})` : t.symbol}
                       </option>
                     ))}
                   </select>
@@ -396,7 +484,13 @@ export default function SwapPage() {
                 <div style={{ display: "grid", gap: 6 }}>
                   <div style={{ fontSize: 12, opacity: 0.8 }}>Preview</div>
                   <div style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)" }}>
-                    {sellPreset?.symbol || "Token"} → {buyPreset?.symbol || "Token"}
+                    {(sellPreset?.name && sellPreset.name !== sellPreset.symbol
+                      ? `${sellPreset.name} (${sellPreset.symbol})`
+                      : sellPreset?.symbol) || "Token"}{" "}
+                    →{" "}
+                    {(buyPreset?.name && buyPreset.name !== buyPreset.symbol
+                      ? `${buyPreset.name} (${buyPreset.symbol})`
+                      : buyPreset?.symbol) || "Token"}
                   </div>
                 </div>
               </div>

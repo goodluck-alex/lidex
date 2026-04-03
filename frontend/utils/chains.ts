@@ -19,3 +19,12 @@ export function txUrl(chainId: number | null, hash: string) {
   return base ? `${base}${hash}` : null;
 }
 
+/** Contract label page (e.g. BscScan `/address/0x…`), derived from `explorers.txBase`. */
+export function contractUrl(chainId: number | null, address: string) {
+  if (!chainId) return null;
+  const base = CHAIN_META[chainId]?.explorerTxBase;
+  if (!base) return null;
+  const prefix = base.replace(/\/tx\/?$/i, "/address/");
+  return `${prefix}${address}`;
+}
+

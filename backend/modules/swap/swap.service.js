@@ -1,15 +1,34 @@
+/**
+ * DEX swap orchestration — external liquidity via 0x only (`requireDexMode` routes).
+ * Do not use this module for CEX / internal matcher fills; see docs/architecture.md §3.
+ */
 const swap0xService = require("../swap0x/swap0x.service");
 const feesService = require("../fees/fees.service");
 const referralLedger = require("../referral/referral.ledger");
 const referralModel = require("../referral/referral.model");
+const { getOrCreateUserByAddress } = require("../users/users.model");
+const stakingService = require("../staking/staking.service");
+
+function assertRoutableQuote(q) {
+  if (q && q.liquidityAvailable === false) {
+    const err = new Error(
+      "No on-chain liquidity route for this pair yet. Add AMM liquidity (e.g. PancakeSwap on BSC) so 0x can aggregate it."
+    );
+    err.statusCode = 422;
+    err.details = { liquidityAvailable: false };
+    throw err;
+  }
+}
 
 async function quote({ body }) {
   const q = await swap0xService.quote(body || {});
+  assertRoutableQuote(q);
   return { ok: true, quote: q };
 }
 
 async function execute({ body, user }) {
   const q = await swap0xService.quote(body || {});
+  assertRoutableQuote(q);
 
   // fee tracking (Phase 1+)
   if (q?.fees?.integratorFee?.token && q?.fees?.integratorFee?.amount) {
@@ -47,9 +66,13 @@ async function execute({ body, user }) {
     const parentAddress = String(user.referralParent).toLowerCase();
     const childAddress = String(user.address).toLowerCase();
     const integratorFeeAmount = BigInt(q.fees.integratorFee.amount);
-    const rewardAmount = (integratorFeeAmount * BigInt(Math.round((tiers.level1 || 0) * 10000))) / 10000n;
+    const parentUser = await getOrCreateUserByAddress(parentAddress);
+    const boostBps = await stakingService.effectiveReferralBoostBpsForUser(parentUser.id);
+    const level1Bps = Math.min(10000, Math.max(0, Math.round((tiers.level1 || 0) * 10000)));
+    const shareBps = Math.min(10000, level1Bps + boostBps);
+    const rewardAmount = (integratorFeeAmount * BigInt(shareBps)) / 10000n;
 
-    referralReward = referralLedger.add({
+    referralReward = await referralLedger.add({
       id: q.zid || `${Date.now()}`,
       chainId: body?.chainId,
       parentAddress,
@@ -58,9 +81,8 @@ async function execute({ body, user }) {
       integratorFeeAmount: q.fees.integratorFee.amount,
       rewardAmount: rewardAmount.toString(),
       amountUsd: 0,
-      createdAt: Date.now(),
       status: "pending",
-      payoutStatus: "unpaid"
+      payoutStatus: "unpaid",
     });
   }
 

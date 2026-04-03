@@ -73,8 +73,12 @@ export function TopNav() {
           <NavLink href="/markets" label="Markets" />
           <NavLink href="/wallet" label="Wallet" />
           <NavLink href="/referral" label="Referral" />
+          <NavLink href="/presale" label="LDX" />
+          <NavLink href="/listings/apply" label="List token" />
           {isCex && <NavLink href="/staking" label="Staking" />}
           {isCex && <NavLink href="/launchpad" label="Launchpad" />}
+          {isCex && <NavLink href="/governance" label="Governance" />}
+          {isCex && <NavLink href="/margin" label="Margin" />}
           <NavLink href="/settings" label="Settings" />
           <NavLink href="/docs" label="Docs" />
         </div>

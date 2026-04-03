@@ -120,11 +120,15 @@ export function Pill({ children, tone = "muted" }: { children: React.ReactNode; 
 export function Button({
   children,
   onClick,
-  variant = "primary"
+  variant = "primary",
+  disabled,
+  style: styleProp
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   variant?: "primary" | "secondary" | "danger";
+  disabled?: boolean;
+  style?: React.CSSProperties;
 }) {
   const bg = variant === "primary" ? "#00C896" : variant === "danger" ? "#e35b5b" : "rgba(255,255,255,0.10)";
   const color = variant === "secondary" ? "white" : "#071016";
@@ -133,15 +137,18 @@ export function Button({
   return (
     <button
       type="button"
-      onClick={onClick}
+      disabled={disabled}
+      onClick={disabled ? undefined : onClick}
       style={{
         border,
         background: bg,
         color,
         padding: "10px 12px",
         borderRadius: 12,
-        cursor: "pointer",
-        fontWeight: 700
+        cursor: disabled ? "not-allowed" : "pointer",
+        fontWeight: 700,
+        opacity: disabled ? 0.55 : 1,
+        ...styleProp
       }}
     >
       {children}

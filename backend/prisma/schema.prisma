@@ -1,0 +1,539 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String   @id @default(cuid())
+  address               String   @unique
+  referralParentAddress String?  @map("referral_parent_address")
+  preferences           Json     @default("{}")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  cexBalances            CexBalance[]
+  cexOrders              CexOrder[]
+  cexLedgerEntries       CexLedgerEntry[]
+  cexOnchainDeposits      CexOnchainDeposit[]
+  cexOnchainWithdrawals   CexOnchainWithdrawal[]
+  cexWithdrawAuthNonces   CexWithdrawAuthNonce[]
+  cexLiquidityPositions   CexLiquidityPosition[]
+  cexStakePositions       CexStakePosition[]
+  launchpadAllocations    LaunchpadAllocation[]
+  govSignalVotes         GovSignalVote[]
+  cexMarginPositions    CexMarginPosition[]
+
+  @@map("users")
+}
+
+/// Append-only audit of CEX balance movements (paper / simulated in MVP).
+model CexLedgerEntry {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  kind       String
+  asset      String
+  deltaAvail String   @map("delta_available")
+  /// Set for on-chain deposit / withdraw rows when known.
+  refTxHash  String?  @map("ref_tx_hash")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("cex_ledger_entries")
+}
+
+/// One credited ERC-20 transfer per log (idempotent deposit confirmation).
+model CexOnchainDeposit {
+  id        String   @id @default(cuid())
+  chainId   Int      @map("chain_id")
+  txHash    String   @map("tx_hash")
+  logIndex  Int      @map("log_index")
+  userId    String   @map("user_id")
+  asset     String
+  amount    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chainId, txHash, logIndex])
+  @@index([userId])
+  @@map("cex_onchain_deposits")
+}
+
+model CexOnchainWithdrawal {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  chainId    Int      @map("chain_id")
+  asset      String
+  amount     String
+  toAddress  String   @map("to_address")
+  status     String
+  txHash     String?  @map("tx_hash")
+  failReason String?  @map("fail_reason")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("cex_onchain_withdrawals")
+}
+
+/// High-water mark for deposit log scans (per chain).
+model CexOnchainSyncState {
+  chainId          Int      @id @map("chain_id")
+  lastScannedBlock Int      @map("last_scanned_block")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("cex_onchain_sync_state")
+}
+
+/// Txs seen before min confirmations; retried until credited or dropped.
+model CexOnchainPendingDeposit {
+  chainId   Int      @map("chain_id")
+  txHash    String   @map("tx_hash")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([chainId, txHash])
+  @@map("cex_onchain_pending_deposits")
+}
+
+/// One-time nonces for EIP-191 signed withdraw-to-any-address.
+model CexWithdrawAuthNonce {
+  nonce     String    @id @map("nonce")
+  userId    String    @map("user_id")
+  expiresAt DateTime  @map("expires_at")
+  used      Boolean   @default(false)
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("cex_withdraw_auth_nonces")
+}
+
+/// Custodial spot balances (internal ledger). Amounts are decimal strings in human units for MVP (e.g. "100.5" USDT).
+model CexBalance {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  asset     String
+  available String   @default("0")
+  locked    String   @default("0")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, asset])
+  @@index([userId])
+  @@map("cex_balances")
+}
+
+/// Internal AMM-style pool (Phase 4). Reserves + LP shares are decimal strings in human units; no on-chain 0x.
+model CexLiquidityPool {
+  id            String   @id @default(cuid())
+  /// e.g. LDX/USDT — aligns with CEX_MATCHER_SYMBOL
+  symbol        String   @unique
+  baseAsset     String   @map("base_asset")
+  quoteAsset    String   @map("quote_asset")
+  reserveBase   String   @default("0") @map("reserve_base")
+  reserveQuote  String   @default("0") @map("reserve_quote")
+  totalLpSupply String   @default("0") @map("total_lp_supply")
+  feeBps        Int      @default(0) @map("fee_bps")
+  status        String   @default("active")
+  /// Optional rewards config (Phase 4): per-second emission in rewardAsset and global accumulator.
+  rewardAsset        String?  @map("reward_asset")
+  rewardRatePerSecond String? @map("reward_rate_per_second")
+  rewardAccPerLp      String  @default("0") @map("reward_acc_per_lp")
+  rewardLastAccruedAt DateTime? @map("reward_last_accrued_at")
+  /// Synthetic resting orders so `cex_trades` can reference a maker for pool fills (not shown on the book).
+  proxyMakerBuyOrderId  String?  @map("proxy_maker_buy_order_id")
+  proxyMakerSellOrderId String?  @map("proxy_maker_sell_order_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  positions CexLiquidityPosition[]
+
+  @@map("cex_liquidity_pools")
+}
+
+model CexLiquidityPosition {
+  id       String   @id @default(cuid())
+  userId   String   @map("user_id")
+  poolId   String   @map("pool_id")
+  lpShares String   @default("0") @map("lp_shares")
+  /// Accrued but unclaimed rewards and per-user accumulator snapshot.
+  rewardDebt      String   @default("0") @map("reward_debt")
+  unclaimedReward String   @default("0") @map("unclaimed_reward")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pool CexLiquidityPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, poolId])
+  @@index([userId])
+  @@index([poolId])
+  @@map("cex_liquidity_positions")
+}
+
+/// Phase 5 — internal LDX staking (CEX balances, not on-chain).
+model CexStakePool {
+  id        String   @id @default(cuid())
+  asset     String
+  label     String
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  positions CexStakePosition[]
+  tiers     CexStakeTier[]
+
+  @@map("cex_stake_pools")
+}
+
+model CexStakePosition {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  poolId       String   @map("pool_id")
+  stakedAmount String   @default("0") @map("staked_amount")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pool CexStakePool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, poolId])
+  @@index([userId])
+  @@index([poolId])
+  @@map("cex_stake_positions")
+}
+
+model CexStakeTier {
+  id                String   @id @default(cuid())
+  poolId            String   @map("pool_id")
+  label             String
+  minStake          String   @map("min_stake")
+  feeBps            Int      @map("fee_bps")
+  referralBoostBps  Int      @map("referral_boost_bps")
+  isPremium         Boolean  @default(false) @map("is_premium")
+  rank              Int      @default(0)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  pool CexStakePool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  @@index([poolId])
+  @@map("cex_stake_tiers")
+}
+
+/// Phase 7 — token listing ecosystem (project application + approved token registry).
+model TokenListingApplication {
+  id           String   @id @default(cuid())
+  projectName  String   @map("project_name")
+  contactEmail String?  @map("contact_email")
+  websiteUrl   String?  @map("website_url")
+  chainId      Int      @map("chain_id")
+  tokenAddress String   @map("token_address")
+  symbol       String
+  decimals     Int
+  pairWithLdx  Boolean  @default(true) @map("pair_with_ldx")
+  notes        String?  @db.Text
+  /// Auto-listing outcome detail (reject reason, or why automation was skipped).
+  automationNote String? @map("automation_note") @db.Text
+  status       String   @default("submitted")
+  reviewedAt   DateTime? @map("reviewed_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([chainId, tokenAddress])
+  @@index([status, createdAt])
+  @@map("token_listing_applications")
+}
+
+model ListedToken {
+  id        String   @id @default(cuid())
+  chainId   Int      @map("chain_id")
+  address   String   @map("address")
+  symbol    String
+  decimals  Int
+  /// Project display name (from listing application at approve / auto-list time).
+  name      String   @default("")
+  logoUrl   String?  @map("logo_url")
+  status    String   @default("active")
+  featured  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([chainId, address])
+  @@index([chainId, status])
+  @@map("listed_tokens")
+}
+
+/// Promotes a product pair from shared `pairs.js` `comingSoon` → `active` (merged with env `DEX_ACTIVE_PAIR_SYMBOLS`).
+model DexPairActivation {
+  id        String   @id @default(cuid())
+  /// Canonical symbol e.g. ABC/LDX (uppercase).
+  symbol    String   @unique
+  active    Boolean  @default(true)
+  note      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("dex_pair_activations")
+}
+
+/// Limit orders against the internal CEX book (no 0x). Price/qty/filled are decimal strings for product symbols.
+model CexOrder {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  symbol    String
+  side      String
+  orderType String   @default("limit") @map("order_type")
+  /// Trigger price for stop-limit (quote); null for other order types.
+  stopPrice String?  @map("stop_price")
+  price     String
+  quantity  String
+  filled    String   @default("0")
+  status    String
+  /// Maker-only limit flag (P8-M4); stored for API/audit.
+  postOnly  Boolean  @default(false) @map("post_only")
+  /// Optional bot idempotency key (unique per user when set).
+  clientOrderId String? @map("client_order_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  makerTrades CexTrade[] @relation("TradeMakerOrder")
+  takerTrades CexTrade[] @relation("TradeTakerOrder")
+
+  @@unique([userId, clientOrderId])
+  @@index([userId, status])
+  @@index([symbol, status])
+  @@map("cex_orders")
+}
+
+/// Executed internal match. Links maker/taker orders for audit.
+model CexTrade {
+  id           String   @id @default(cuid())
+  symbol       String
+  price        String
+  quantity     String
+  makerOrderId String   @map("maker_order_id")
+  takerOrderId String   @map("taker_order_id")
+  makerUserId  String   @map("maker_user_id")
+  takerUserId  String   @map("taker_user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  makerOrder CexOrder @relation("TradeMakerOrder", fields: [makerOrderId], references: [id], onDelete: Restrict)
+  takerOrder CexOrder @relation("TradeTakerOrder", fields: [takerOrderId], references: [id], onDelete: Restrict)
+
+  @@index([symbol])
+  @@index([createdAt])
+  @@map("cex_trades")
+}
+
+/// Direct referral edge: child completed POST /v1/referral/attach with parent ref.
+model ReferralAttachment {
+  id           String   @id @default(cuid())
+  parentAddress String  @map("parent_address")
+  childAddress  String  @map("child_address")
+  attachedAt    DateTime @default(now()) @map("attached_at")
+
+  @@unique([parentAddress, childAddress])
+  @@index([parentAddress])
+  @@map("referral_attachments")
+}
+
+model ReferralLedgerEntry {
+  id                   String    @id
+  chainId              Int       @map("chain_id")
+  parentAddress        String    @map("parent_address")
+  childAddress         String    @map("child_address")
+  feeToken             String    @map("fee_token")
+  integratorFeeAmount  String    @map("integrator_fee_amount")
+  rewardAmount         String    @map("reward_amount")
+  amountUsd            Float     @default(0) @map("amount_usd")
+  status               String
+  payoutStatus         String    @default("unpaid") @map("payout_status")
+  txHash               String?   @map("tx_hash")
+  confirmedAt          DateTime? @map("confirmed_at")
+  payoutTxHash         String?   @map("payout_tx_hash")
+  paidAt               DateTime? @map("paid_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+
+  @@index([parentAddress])
+  @@index([childAddress])
+  @@map("referral_ledger_entries")
+}
+
+model AuthSession {
+  id          String   @id
+  userAddress String   @map("user_address")
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userAddress])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+/// Phase 8 — CEX launchpad: fixed-price tranche; pay from custodial balance, credit offer asset (internal IOU).
+model LaunchpadSale {
+  id                 String   @id @default(cuid())
+  slug               String   @unique
+  title              String
+  summary            String?  @db.Text
+  offerAsset         String   @map("offer_asset")
+  payAsset           String   @map("pay_asset")
+  pricePayPerToken   String   @map("price_pay_per_token")
+  totalOfferTokens   String   @map("total_offer_tokens")
+  soldTokens         String   @default("0") @map("sold_tokens")
+  /// Minimum staking tier rank (1 = lowest tier in pool). 0 = no staking gate.
+  minTierRank        Int      @default(0) @map("min_tier_rank")
+  status             String   @default("draft")
+  startsAt           DateTime? @map("starts_at")
+  endsAt             DateTime? @map("ends_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  allocations LaunchpadAllocation[]
+
+  @@index([status, startsAt])
+  @@map("launchpad_sales")
+}
+
+model LaunchpadAllocation {
+  id             String   @id @default(cuid())
+  saleId         String   @map("sale_id")
+  userId         String   @map("user_id")
+  payAmount      String   @map("pay_amount")
+  tokensReceived String   @map("tokens_received")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  sale LaunchpadSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([saleId, userId])
+  @@index([userId, createdAt])
+  @@map("launchpad_allocations")
+}
+
+/// Phase 8 — boosts CEX internal LP reward emission (see `CEX_LIQ_REWARD_RATE_PER_SECOND`) for a window.
+model LiqMiningCampaign {
+  id             String    @id @default(cuid())
+  /// Match `CexLiquidityPool.symbol`; null = applies to every pool.
+  poolSymbol     String?   @map("pool_symbol")
+  label          String?
+  /// Basis points on base rate (10000 = 1x, 15000 = 1.5x). Capped in application code.
+  multiplierBps  Int       @map("multiplier_bps")
+  status         String    @default("active")
+  startsAt       DateTime? @map("starts_at")
+  endsAt         DateTime? @map("ends_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([poolSymbol, status])
+  @@map("liq_mining_campaigns")
+}
+
+/// Phase 8 — off-chain signaling: weighted by CEX LDX spot or staked LDX (no on-chain governor).
+model GovSignalProposal {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  description String?   @db.Text
+  /// cex_ldx_available | cex_ldx_staked — see `GOVERNANCE_SIGNAL` module
+  powerBasis  String    @map("power_basis")
+  status      String    @default("draft")
+  startsAt    DateTime? @map("starts_at")
+  endsAt      DateTime? @map("ends_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  votes GovSignalVote[]
+
+  @@index([status, startsAt])
+  @@map("gov_signal_proposals")
+}
+
+model GovSignalVote {
+  id         String   @id @default(cuid())
+  proposalId String   @map("proposal_id")
+  userId     String   @map("user_id")
+  /// yes | no | abstain
+  choice     String
+  /// Decimal string: voting power at cast/last update (`CEX_STAKE_ASSET`-denominated).
+  weight     String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  proposal GovSignalProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([proposalId, userId])
+  @@index([proposalId])
+  @@index([userId])
+  @@map("gov_signal_votes")
+}
+
+/// P8-M5 — isolated leveraged exposure on the CEX matcher symbol (synthetic; custodial quote collateral only).
+model CexMarginPosition {
+  id               String    @id @default(cuid())
+  userId           String    @map("user_id")
+  symbol           String
+  /// long | short
+  side             String
+  leverage         Int
+  /// Initial margin locked from user (quote asset).
+  collateralQuote  String    @map("collateral_quote")
+  /// Position size in base asset (decimal string).
+  sizeBase         String    @map("size_base")
+  /// Average entry price, quote per base.
+  entryPrice       String    @map("entry_price")
+  /// open | closed | liquidated
+  status           String    @default("open")
+  /// Mark at last evaluation (display / audit).
+  lastMarkPrice    String?   @map("last_mark_price")
+  realizedPnlQuote String?   @map("realized_pnl_quote")
+  closedAt         DateTime? @map("closed_at")
+  /// freeform: REJECT if user closes; LIQUIDATED if maintenance breached
+  closeReason      String?   @map("close_reason")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([symbol, status])
+  @@map("cex_margin_positions")
+}
+
+/// Operator mutations under `/v1/admin` (POST/PATCH/DELETE). No request bodies stored.
+model AdminAuditLog {
+  id               String   @id @default(cuid())
+  createdAt        DateTime @default(now()) @map("created_at")
+  method           String
+  /// Truncated URL (includes query when present); max 1024 chars at insert.
+  path             String
+  statusCode       Int      @map("status_code")
+  /// First 8 hex chars of SHA256(presented admin key).
+  keyFingerprint   String?  @map("key_fingerprint") @db.VarChar(8)
+  /// First two path segments after `/v1/admin`, e.g. `launchpad/sales`.
+  resource         String?
+  /// Client IP; set `TRUST_PROXY=1` when behind a reverse proxy.
+  ip               String?
+  /// Optional change-management ticket (header `X-Support-Ticket-Id`).
+  supportTicketId  String?  @map("support_ticket_id") @db.VarChar(128)
+  /// Second admin key fingerprint when `X-Admin-Approver-Key` was valid and distinct from primary.
+  approverKeyFingerprint String? @map("approver_key_fingerprint") @db.VarChar(8)
+
+  @@index([createdAt])
+  @@index([resource, createdAt])
+  @@map("admin_api_audit_logs")
+}

@@ -1,7 +1,8 @@
-const { PAIRS } = require("@lidex/shared");
+const { getMergedPhase1PairsAsync } = require("../../lib/dexPairsFromEnv");
 
-function list() {
-  return { phase1: PAIRS.phase1 };
+async function list() {
+  const phase1 = await getMergedPhase1PairsAsync();
+  return { phase1 };
 }
 
 module.exports = { list };

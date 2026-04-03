@@ -12,14 +12,22 @@ function readBrowserLidexMode(): "dex" | "cex" {
   return value === "cex" ? "cex" : "dex";
 }
 
+/** Same as cookie/header mode used by `lidexModeHeaders` (for EventSource URLs, etc.). */
+export function browserLidexMode(): "dex" | "cex" {
+  return readBrowserLidexMode();
+}
+
 /** Send on every `/v1/*` call (except auth bootstrap) so the API can enforce DEX vs CEX surfaces. */
 export function lidexModeHeaders(): Record<string, string> {
   return { [LIDEX_MODE_HEADER]: readBrowserLidexMode() };
 }
 
-function baseUrl() {
-  // Next exposes NEXT_PUBLIC_* to the browser
+export function backendBaseUrl() {
   return process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+}
+
+function baseUrl() {
+  return backendBaseUrl();
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
@@ -28,8 +36,12 @@ export async function apiGet<T>(path: string): Promise<T> {
     credentials: "include",
     headers: { ...lidexModeHeaders() }
   });
-  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
-  return (await res.json()) as T;
+  const data = (await res.json().catch(() => null)) as T | { ok?: false; error?: string } | null;
+  if (!res.ok) {
+    const msg = (data as { error?: string } | null)?.error || `GET ${path} failed: ${res.status}`;
+    throw new Error(msg);
+  }
+  return data as T;
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
@@ -42,6 +54,20 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const data = (await res.json().catch(() => null)) as T | null;
   if (!res.ok) {
     const msg = (data as any)?.error || `POST ${path} failed: ${res.status}`;
+    throw new Error(msg);
+  }
+  return data as T;
+}
+
+export async function apiDelete<T>(path: string): Promise<T> {
+  const res = await fetch(`${baseUrl()}${path}`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: { ...lidexModeHeaders() }
+  });
+  const data = (await res.json().catch(() => null)) as T | null;
+  if (!res.ok) {
+    const msg = (data as any)?.error || `DELETE ${path} failed: ${res.status}`;
     throw new Error(msg);
   }
   return data as T;
