@@ -1,6 +1,9 @@
 # Render Blueprint — Lidex backend API (Express + Prisma).
 # Docs: https://render.com/docs/blueprint-spec
 #
+# Start Command MUST be `npm start` (node server.js). Do not use `npm run dev` — nodemon
+# will not open a stable port for Render's health check.
+#
 # After first deploy: add env vars in the dashboard (DATABASE_URL, secrets).
 # CORS: set APP_PUBLIC_URL / allowed origins if the frontend is on another host.
 
