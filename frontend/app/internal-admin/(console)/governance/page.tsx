@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import { adminApi } from "../../../lib/adminServer";
-import { PageShell, Card } from "../../../components/ui";
+import { adminApi } from "../../../../lib/adminServer";
+import { PageShell, Card } from "../../../../components/ui";
 import { createGovSignal, patchGovSignal } from "../../actions";
 
 type Proposal = {

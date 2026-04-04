@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import { adminApi } from "../../../lib/adminServer";
-import { PageShell, Card } from "../../../components/ui";
+import { adminApi } from "../../../../lib/adminServer";
+import { PageShell, Card } from "../../../../components/ui";
 import { createLaunchpadSale, patchLaunchpadSale } from "../../actions";
 
 type Sale = {

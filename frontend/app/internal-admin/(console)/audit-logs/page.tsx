@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import { adminApi } from "../../../lib/adminServer";
-import { PageShell, Card } from "../../../components/ui";
+import { adminApi } from "../../../../lib/adminServer";
+import { PageShell, Card } from "../../../../components/ui";
 
 type Entry = {
   id: string;

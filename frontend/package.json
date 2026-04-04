@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@lidex/shared": "file:../shared",
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@tanstack/react-query": "^5.96.1",
     "lightweight-charts": "^5.1.0",

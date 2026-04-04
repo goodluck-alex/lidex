@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import { PageShell, Card } from "../../components/ui";
+import { PageShell, Card } from "../../../components/ui";
 
 const cardLink: CSSProperties = {
   display: "block",
