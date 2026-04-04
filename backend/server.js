@@ -956,11 +956,12 @@ async function start() {
   } catch {
     /* non-fatal */
   }
-  app.listen(port, () => {
+  // Bind all interfaces — required on Render, Railway, Fly, etc. (not only localhost).
+  app.listen(Number(port), "0.0.0.0", () => {
     logDexEnvSummary();
     stopCexDepositPoller = cexOnchain.startDepositPollerIfEnabled();
     // eslint-disable-next-line no-console
-    console.log(`Lidex backend listening on :${port}`);
+    console.log(`Lidex backend listening on 0.0.0.0:${port}`);
   });
 }
 

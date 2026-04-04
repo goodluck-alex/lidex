@@ -128,8 +128,8 @@ export default async function InternalAdminLiqMiningPage() {
   );
 }
 
-const lbl: React.CSSProperties = { fontSize: 13 };
-const inp: React.CSSProperties = {
+const lbl: CSSProperties = { fontSize: 13 };
+const inp: CSSProperties = {
   display: "block",
   width: "100%",
   marginTop: 4,

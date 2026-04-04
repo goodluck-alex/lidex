@@ -1,0 +1,22 @@
+# Render Blueprint — Lidex backend API (Express + Prisma).
+# Docs: https://render.com/docs/blueprint-spec
+#
+# After first deploy: add env vars in the dashboard (DATABASE_URL, secrets).
+# CORS: set APP_PUBLIC_URL / allowed origins if the frontend is on another host.
+
+services:
+  - type: web
+    name: lidex-backend
+    runtime: node
+    rootDir: backend
+    # Requires DATABASE_URL (e.g. link a Render PostgreSQL instance). If build fails before DB exists, use:
+    # buildCommand: npm install && npx prisma generate
+    # then run `npx prisma migrate deploy` once from the Render shell.
+    buildCommand: npm install && npx prisma generate && npx prisma migrate deploy
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20.18.0"
+      - key: TRUST_PROXY
+        value: "1"
