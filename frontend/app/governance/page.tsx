@@ -134,9 +134,9 @@ export default function GovernancePage() {
 
   if (!isCex) {
     return (
-      <PageShell title="Governance" subtitle="Switch to CEX mode to view signaling polls.">
+      <PageShell title="Governance" subtitle="Community polls are available in full trading mode.">
         <Card>
-          <Muted>These polls use custodial LDX balances and weights — they are only available in CEX mode.</Muted>
+          <Muted>Switch to full trading mode in the header to view and vote on polls.</Muted>
         </Card>
       </PageShell>
     );
@@ -148,7 +148,7 @@ export default function GovernancePage() {
   return (
     <PageShell
       title="Governance signaling"
-      subtitle="Non-binding, CEX-weighted signal polls. Outcomes are informational; execution is off-chain / administrative."
+      subtitle="Community signal polls. Results are informational and do not bind the platform."
     >
       <Grid columns={2} gap={16}>
         <Card>
@@ -258,12 +258,6 @@ export default function GovernancePage() {
               ) : null}
 
               {msg ? <div style={{ fontSize: 12, opacity: 0.85 }}>{msg}</div> : null}
-
-              <div style={{ fontSize: 11, opacity: 0.55, lineHeight: 1.45 }}>
-                Admin: <code style={{ fontSize: 11 }}>POST /v1/admin/governance/signals</code> with <b>ADMIN_API_KEY</b>.{" "}
-                <code style={{ fontSize: 11 }}>powerBasis</code> is <code>cex_ldx_available</code> or{" "}
-                <code>cex_ldx_staked</code>.
-              </div>
             </div>
           )}
         </Card>

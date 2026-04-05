@@ -79,7 +79,7 @@ export default function ReferralPage() {
   return (
     <PageShell
       title="Referral"
-      subtitle={isCex ? "CEX Full: levels, bonuses, referred users, staking/trading rewards." : "DEX Lite: link + basic stats."}
+      subtitle="Share your link and track referrals and rewards."
     >
       {loading ? (
         <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 12 }}>Loading referral data…</div>
@@ -97,9 +97,9 @@ export default function ReferralPage() {
                     Code: <span style={{ opacity: 0.95 }}>{code.slice(0, 10)}…</span>
                   </div>
                 ) : null}
-                <div style={{ fontSize: 12, opacity: 0.72 }}>
-                  {error ? `Error: ${error}` : loading ? "—" : "Loaded from backend (Phase 1)."}
-                </div>
+                {error ? (
+                  <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div>
+                ) : null}
               </div>
             </Card>
           </Span>
@@ -126,7 +126,7 @@ export default function ReferralPage() {
           </Span>
 
           <Span col={12}>
-            <Card title="Phase 1 tiers" tone="info" right={<Pill>Referral</Pill>}>
+            <Card title="Referral tiers" tone="info" right={<Pill>Referral</Pill>}>
               <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.5 }}>
                 Tier split (example): L1 {formatPct(stats?.tiers?.level1 ?? 0.3)} / L2{" "}
                 {formatPct(stats?.tiers?.level2 ?? 0.1)} / L3 {formatPct(stats?.tiers?.level3 ?? 0.05)}. Level bumps
@@ -171,7 +171,7 @@ export default function ReferralPage() {
           </Span>
 
           <Span col={12}>
-            <Card title="Rewards ledger (Phase 1)" right={<Pill tone="info">{ledger.length}</Pill>}>
+            <Card title="Rewards history" right={<Pill tone="info">{ledger.length}</Pill>}>
               {ledger.length === 0 ? (
                 <div style={{ fontSize: 13, opacity: 0.8 }}>No rewards yet.</div>
               ) : (
@@ -226,9 +226,9 @@ export default function ReferralPage() {
                           <div style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", fontSize: 13, opacity: 0.9 }}>
                             {link}
                           </div>
-                          <div style={{ fontSize: 12, opacity: 0.72 }}>
-                            {error ? `Error: ${error}` : "Loaded from backend (Phase 1)."}
-                          </div>
+                          {error ? (
+                            <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div>
+                          ) : null}
                         </div>
                       </Card>
                     </Span>
@@ -324,9 +324,7 @@ export default function ReferralPage() {
                   <div style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", fontSize: 13, opacity: 0.9 }}>
                     {link}
                   </div>
-                  <div style={{ fontSize: 12, opacity: 0.72 }}>
-                    {error ? `Error: ${error}` : "Loaded from backend (Phase 1)."}
-                  </div>
+                  {error ? <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div> : null}
                 </div>
               </Card>
               <div style={{ marginTop: 12 }}>
@@ -350,7 +348,7 @@ export default function ReferralPage() {
                 </Card>
               </div>
               <div style={{ marginTop: 12 }}>
-                <Card title="Phase 1 tiers" right={<Pill>Referral</Pill>}>
+                <Card title="Referral tiers" right={<Pill>Referral</Pill>}>
                   <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.6 }}>
                     L1 {formatPct(stats?.tiers?.level1 ?? 0.3)} / L2 {formatPct(stats?.tiers?.level2 ?? 0.1)} / L3{" "}
                     {formatPct(stats?.tiers?.level3 ?? 0.05)}.

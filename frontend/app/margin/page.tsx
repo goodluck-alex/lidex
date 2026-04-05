@@ -101,9 +101,9 @@ export default function MarginPage() {
 
   if (!isCex) {
     return (
-      <PageShell title="Margin" subtitle="Switch to CEX mode. Margin uses custodial quote collateral on the internal pair.">
+      <PageShell title="Margin" subtitle="Margin trading is available in full trading mode.">
         <Card>
-          <div style={{ fontSize: 13, opacity: 0.78 }}>This surface is CEX-only.</div>
+          <div style={{ fontSize: 13, opacity: 0.78 }}>Switch to full trading mode in the header to use margin.</div>
         </Card>
       </PageShell>
     );
@@ -119,16 +119,15 @@ export default function MarginPage() {
 
   return (
     <PageShell
-      title="Isolated margin (v0)"
-      subtitle={`Synthetic ${sym} exposure — quote collateral only, mark from last trade or book mid. High risk; defaults off — set MARGIN_ENABLED=true.`}
+      title="Isolated margin"
+      subtitle={`Leveraged ${sym} exposure using ${q} collateral. Mark price follows recent trades. Trading with leverage is high risk.`}
     >
       <Grid columns={2} gap={16}>
         <Card>
           <div style={{ fontWeight: 800, marginBottom: 10 }}>Open position</div>
           {!en ? (
             <div style={{ fontSize: 13, opacity: 0.82 }}>
-              Margin is <b>disabled</b>. Ops: <code>MARGIN_ENABLED=true</code>, tune{" "}
-              <code>MARGIN_MAX_LEVERAGE</code>, <code>MARGIN_MAINTENANCE_BPS</code>.
+              Margin is <b>not enabled</b> on this deployment.
             </div>
           ) : !authed ? (
             <div style={{ fontSize: 13, opacity: 0.82 }}>Sign in (Wallet) to trade.</div>

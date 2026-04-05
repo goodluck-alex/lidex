@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useMode } from "../../context/mode";
-import { Button, Card, Grid, PageShell, Pill, Span } from "../../components/ui";
-import { ResponsivePanels } from "../../components/ResponsivePanels";
+import { Button, Card, Grid, PageShell, Span } from "../../components/ui";
 import { TOKENS, type ChainId } from "../../utils/tokens";
 import { encodeAllowance, encodeApprove, hexToBigInt, maxUint256Hex } from "../../utils/erc20";
 import { chainName, txUrl } from "../../utils/chains";
@@ -19,9 +17,6 @@ type QuoteResponse = { ok: true; quote: unknown };
 type ExecuteResponse = { ok: true; tx: { to: string; data: string; value?: string }; referralReward?: { id: string } };
 
 export default function SwapPage() {
-  const { mode } = useMode();
-  const isCex = mode === "cex";
-
   const wallet = useWallet();
   const [chainId, setChainId] = useState<ChainId>(56);
   const [runtimePresets, setRuntimePresets] = useState<{
@@ -40,6 +35,8 @@ export default function SwapPage() {
   const [sending, setSending] = useState<"idle" | "approving" | "swapping">("idle");
   const [allowanceOk, setAllowanceOk] = useState<boolean | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [slippagePanelOpen, setSlippagePanelOpen] = useState(false);
+  const [arrowSpin, setArrowSpin] = useState(false);
 
   const sellPreset = presets.find((t) => t.address.toLowerCase() === sellToken.toLowerCase());
   const buyPreset = presets.find((t) => t.address.toLowerCase() === buyToken.toLowerCase());
@@ -114,6 +111,32 @@ export default function SwapPage() {
     setQuoteError(null);
   }
 
+  function flipTokens() {
+    setArrowSpin(true);
+    window.setTimeout(() => setArrowSpin(false), 320);
+    const s = sellToken;
+    setSellToken(buyToken);
+    setBuyToken(s);
+    setQuote(null);
+    setQuoteError(null);
+    setAllowanceOk(null);
+    setTxHash(null);
+  }
+
+  function slippagePctLabel() {
+    const n = Number(slippage);
+    if (!Number.isFinite(n) || n <= 0) return "—";
+    const pct = n * 100;
+    return `${pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(2)}%`;
+  }
+
+  function priceImpactDisplay() {
+    if (!quote) return "—";
+    const raw = (quote as { estimatedPriceImpact?: string }).estimatedPriceImpact;
+    if (raw != null && String(raw).length > 0) return String(raw).includes("%") ? String(raw) : `${raw}%`;
+    return "<0.01%";
+  }
+
   function formatUnits(value: string | number | bigint | null | undefined, decimals: number) {
     if (value === null || value === undefined) return "—";
     const bi = typeof value === "bigint" ? value : BigInt(String(value));
@@ -130,7 +153,7 @@ export default function SwapPage() {
   const sellDecimals = quote?.tokenMetadata?.sellToken?.decimals ?? sellPreset?.decimals ?? 18;
 
   function toUnits(amount: string, decimals: number) {
-    // minimal decimal -> integer string (good enough for Phase 1)
+    // minimal decimal -> integer string for calldata
     const [a, b = ""] = amount.trim().split(".");
     const frac = (b + "0".repeat(decimals)).slice(0, decimals);
     const whole = (a || "0").replace(/^0+(?=\d)/, "");
@@ -156,6 +179,8 @@ export default function SwapPage() {
       if (data?.ok !== true || data.quote == null) throw new Error("Quote failed");
       setQuote(data.quote);
       setTxHash(null);
+      setAllowanceOk(null);
+      await refreshAllowance(data.quote);
     } catch (e) {
       setQuoteError(e instanceof Error ? e.message : "Quote failed");
     } finally {
@@ -163,18 +188,17 @@ export default function SwapPage() {
     }
   }
 
-  async function refreshAllowance() {
+  async function refreshAllowance(activeQuote: typeof quote = quote) {
     if (!wallet.provider || wallet.status !== "connected" || !wallet.address) return;
-    if (!quote?.allowanceTarget) return;
+    if (!activeQuote?.allowanceTarget) return;
     try {
-      // allowance(owner, spender)
-      const data = encodeAllowance(wallet.address, quote.allowanceTarget);
+      const data = encodeAllowance(wallet.address, activeQuote.allowanceTarget);
       const res = await wallet.provider.request({
         method: "eth_call",
         params: [{ to: sellToken, data: `0x${data}` }, "latest"]
       });
       const current = hexToBigInt(String(res));
-      const needed = BigInt(quote.sellAmount || "0");
+      const needed = BigInt(activeQuote.sellAmount || "0");
       setAllowanceOk(current >= needed);
     } catch {
       setAllowanceOk(null);
@@ -274,125 +298,243 @@ export default function SwapPage() {
   return (
     <PageShell
       title="Swap"
-      subtitle={
-        isCex
-          ? "Swap (powered by 0x routing in Phase 1). CEX mode can show optional panels, but it’s still the same DEX swap engine."
-          : "DEX Lite swap experience (powered by 0x routing)."
-      }
+      subtitle="Swap tokens using aggregated on-chain liquidity."
     >
       <Grid>
-        <Span col={isCex ? 7 : 6}>
-          <Card title="Swap" right={<Pill tone="success">{isCex ? "CEX Full" : "DEX Lite"}</Pill>}>
-            <div style={{ display: "grid", gap: 10 }}>
-              {chainId === 56 && LDX_BSC_EXPLORER ? (
-                <div style={{ fontSize: 12, opacity: 0.78 }}>
-                  <a href={LDX_BSC_EXPLORER} target="_blank" rel="noopener noreferrer" style={{ color: "#00C896" }}>
-                    LDX token (BscScan)
+        <Span col={12}>
+          <div className="mb-3 flex flex-col gap-3">
+            {!connectedChainSupported && wallet.status === "connected" ? (
+              <Card title="Unsupported network" tone="danger">
+                <div className="text-sm leading-relaxed text-white/90">
+                  This network is not supported for swap yet. Switch to BSC to continue.
+                  <div className="mt-2.5">
+                    <Button onClick={() => wallet.switchChain(56)}>Switch to BSC</Button>
+                  </div>
+                </div>
+              </Card>
+            ) : null}
+            {chainMismatch ? (
+              <Card title="Network mismatch" tone="info">
+                <div className="text-sm leading-relaxed text-white/90">
+                  Wallet is on <b>{chainName(wallet.chainId)}</b> but the form is set to <b>{chainName(chainId)}</b>.
+                  <div className="mt-2.5 flex flex-wrap gap-2.5">
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        if (wallet.chainId && TOKENS[wallet.chainId as ChainId]) {
+                          const cid = wallet.chainId as ChainId;
+                          setChainId(cid);
+                          const p = TOKENS[cid] || [];
+                          if (p[0]) setSellToken(p[0].address);
+                          if (p[1]) setBuyToken(p[1].address);
+                          setQuote(null);
+                          setQuoteError(null);
+                        }
+                      }}
+                    >
+                      Sync to wallet
+                    </Button>
+                    <Button onClick={() => wallet.switchChain(chainId)}>Switch wallet here</Button>
+                  </div>
+                </div>
+              </Card>
+            ) : null}
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-[#0B0F1A] p-5 shadow-xl">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">🔄 Swap</h2>
+                <p className="mt-0.5 text-sm text-gray-400">Best price • Low fees</p>
+                {chainId === 56 && LDX_BSC_EXPLORER ? (
+                  <a
+                    href={LDX_BSC_EXPLORER}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-block text-xs text-[#00c896] hover:underline"
+                  >
+                    LDX on BscScan
                   </a>
-                </div>
-              ) : null}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>
-                  Wallet:{" "}
-                  <span style={{ opacity: 0.95 }}>
-                    {wallet.status === "unavailable"
-                      ? "No provider"
-                      : wallet.status === "connected"
-                        ? `${wallet.address?.slice(0, 6)}…${wallet.address?.slice(-4)}`
-                        : "Disconnected"}
-                  </span>
+                ) : null}
+              </div>
+              <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+                <div className="text-right text-xs text-white/60">
                   {wallet.status === "connected" ? (
-                    <span style={{ marginLeft: 10, opacity: 0.8 }}>
-                      Network: <span style={{ opacity: 0.95 }}>{chainName(wallet.chainId)}</span>
-                    </span>
-                  ) : null}
+                    <>
+                      <div className="font-mono text-white/90">
+                        {wallet.address?.slice(0, 6)}…{wallet.address?.slice(-4)}
+                      </div>
+                      <div>{chainName(wallet.chainId)}</div>
+                    </>
+                  ) : (
+                    <span>Not connected</span>
+                  )}
                 </div>
-                <Button variant="secondary" onClick={() => wallet.connect()}>
+                <Button variant="secondary" className="!px-3 !py-2 !text-xs" onClick={() => wallet.connect()}>
                   {wallet.status === "connected" ? "Connected" : "Connect wallet"}
                 </Button>
               </div>
+            </div>
 
-              {!connectedChainSupported && wallet.status === "connected" ? (
-                <Card title="Unsupported network" tone="danger">
-                  <div style={{ fontSize: 13, opacity: 0.9, lineHeight: 1.55 }}>
-                    Your wallet is on a network we don’t support yet in Phase 1. Switch to BSC to continue.
-                    <div style={{ marginTop: 10 }}>
-                      <Button onClick={() => wallet.switchChain(56)}>Switch to BSC</Button>
-                    </div>
-                  </div>
-                </Card>
-              ) : null}
+            <div className="mt-4">
+              <label className="text-xs font-medium text-white/50">Network</label>
+              <select
+                value={String(chainId)}
+                onChange={(e) => {
+                  const next = Number(e.target.value) as ChainId;
+                  setChainId(next);
+                  if (wallet.status === "connected") wallet.switchChain(next).catch(() => {});
+                  const p = TOKENS[next] || [];
+                  if (p[0]) setSellToken(p[0].address);
+                  if (p[1]) setBuyToken(p[1].address);
+                  setQuote(null);
+                  setQuoteError(null);
+                  setAllowanceOk(null);
+                  setTxHash(null);
+                  setSending("idle");
+                }}
+                disabled={wallet.status === "connected"}
+                className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-[#00c896]/40 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <option value="1">Ethereum (1)</option>
+                <option value="56">BSC (56)</option>
+                <option value="137">Polygon (137)</option>
+                <option value="42161">Arbitrum (42161)</option>
+                <option value="43114">Avalanche (43114)</option>
+              </select>
+            </div>
 
-              {chainMismatch ? (
-                <Card title="Network mismatch" tone="info">
-                  <div style={{ fontSize: 13, opacity: 0.9, lineHeight: 1.55 }}>
-                    Wallet network is <b>{chainName(wallet.chainId)}</b> but the UI is set to chain <b>{chainName(chainId)}</b>.
-                    For best results, keep them the same.
-                    <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      <Button
-                        variant="secondary"
-                        onClick={() => {
-                          if (wallet.chainId && TOKENS[wallet.chainId as ChainId]) {
-                            const cid = wallet.chainId as ChainId;
-                            setChainId(cid);
-                            const p = TOKENS[cid] || [];
-                            if (p[0]) setSellToken(p[0].address);
-                            if (p[1]) setBuyToken(p[1].address);
-                            setQuote(null);
-                            setQuoteError(null);
-                          }
-                        }}
-                      >
-                        Sync UI to wallet
-                      </Button>
-                      <Button onClick={() => wallet.switchChain(chainId)}>Switch wallet to UI chain</Button>
-                    </div>
-                  </div>
-                </Card>
-              ) : null}
+            <div className="mt-4">
+              <div className="text-xs font-medium text-white/50">From</div>
+              <div className="mt-1.5 space-y-2 rounded-xl bg-white/5 p-4">
+                <select
+                  value={sellToken}
+                  onChange={(e) => {
+                    setSellToken(e.target.value);
+                    setQuote(null);
+                    setQuoteError(null);
+                  }}
+                  className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-[#00c896]/40"
+                >
+                  {presets.map((t) => (
+                    <option key={`sell-${t.symbol}-${t.address}`} value={t.address}>
+                      {t.symbol}
+                      {t.name && t.name !== t.symbol ? ` — ${t.name}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={sellAmountBase}
+                  onChange={(e) => setSellAmountBase(e.target.value)}
+                  placeholder="0.0"
+                  className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-base font-semibold tabular-nums text-white outline-none placeholder:text-white/30 focus:border-[#00c896]/40"
+                />
+              </div>
+            </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>
-                    Chain {wallet.status === "connected" ? "(follows wallet)" : "(select)"}
-                  </div>
-                  <select
-                    value={String(chainId)}
-                    onChange={(e) => {
-                      const next = Number(e.target.value) as ChainId;
-                      setChainId(next);
-                      if (wallet.status === "connected") {
-                        wallet.switchChain(next).catch(() => {});
-                      }
-                      const p = TOKENS[next] || [];
-                      if (p[0]) setSellToken(p[0].address);
-                      if (p[1]) setBuyToken(p[1].address);
-                      setQuote(null);
-                      setQuoteError(null);
-                      setAllowanceOk(null);
-                      setTxHash(null);
-                      setSending("idle");
-                    }}
-                    disabled={wallet.status === "connected"}
-                    style={{
-                      padding: 10,
-                      borderRadius: 12,
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      background: "transparent",
-                      color: "white",
-                      opacity: wallet.status === "connected" ? 0.8 : 1,
-                      cursor: wallet.status === "connected" ? "not-allowed" : "pointer"
-                    }}
-                  >
-                    <option value="1">Ethereum (1)</option>
-                    <option value="56">BSC (56)</option>
-                    <option value="137">Polygon (137)</option>
-                    <option value="42161">Arbitrum (42161)</option>
-                    <option value="43114">Avalanche (43114)</option>
-                  </select>
+            <div className="my-3 flex justify-center">
+              <button
+                type="button"
+                onClick={flipTokens}
+                title="Swap direction"
+                className={`rounded-full bg-white/10 p-2 text-lg text-white/90 transition-transform duration-300 hover:bg-white/[0.14] ${arrowSpin ? "rotate-180" : ""}`}
+              >
+                ⇅
+              </button>
+            </div>
+
+            <div>
+              <div className="text-xs font-medium text-white/50">To</div>
+              <div className="mt-1.5 space-y-2 rounded-xl bg-white/5 p-4">
+                <select
+                  value={buyToken}
+                  onChange={(e) => {
+                    setBuyToken(e.target.value);
+                    setQuote(null);
+                    setQuoteError(null);
+                  }}
+                  className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-[#00c896]/40"
+                >
+                  {presets.map((t) => (
+                    <option key={`buy-${t.symbol}-${t.address}`} value={t.address}>
+                      {t.symbol}
+                      {t.name && t.name !== t.symbol ? ` — ${t.name}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <div className="min-h-[2.75rem] rounded-lg border border-white/10 bg-black/20 px-3 py-2.5 text-base font-semibold tabular-nums text-white/90">
+                  {quote ? (
+                    <>
+                      {formatUnits(quote.buyAmount, buyDecimals)} <span className="text-sm text-white/50">{buyPreset?.symbol}</span>
+                    </>
+                  ) : (
+                    <span className="text-white/35">Estimated amount</span>
+                  )}
                 </div>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>Slippage</div>
+              </div>
+            </div>
+
+            {showLdxQuickPairs ? (
+              <div className="mt-4">
+                <div className="text-xs text-white/45">LDX routes (BSC)</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(
+                    [
+                      ["LDX", "USDT"],
+                      ["USDT", "LDX"],
+                      ["LDX", "BNB"],
+                      ["BNB", "LDX"],
+                      ["LDX", "ETH"],
+                      ["ETH", "LDX"]
+                    ] as const
+                  ).map(([a, b]) => (
+                    <button
+                      key={`${a}-${b}`}
+                      type="button"
+                      onClick={() => setLdxPair(a, b)}
+                      className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-white/85 hover:border-[#00c896]/35 hover:bg-white/[0.08]"
+                    >
+                      {a} → {b}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={() => setSlippagePanelOpen((o) => !o)}
+                className="flex w-full items-center justify-between rounded-xl bg-white/5 px-4 py-3 text-left transition hover:bg-white/[0.07]"
+              >
+                <span className="text-sm text-white/90">
+                  Slippage <span className="opacity-50">⚙️</span>
+                </span>
+                <span className="text-sm text-gray-400">{slippagePctLabel()}</span>
+              </button>
+              {slippagePanelOpen ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {(
+                    [
+                      { label: "0.1%", val: "0.001" },
+                      { label: "0.5%", val: "0.005" },
+                      { label: "1%", val: "0.01" }
+                    ] as const
+                  ).map(({ label, val }) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => {
+                        setSlippage(val);
+                        saveTradingPreferences({ slippageDecimal: val });
+                      }}
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                        slippage === val ? "border-[#00c896]/50 bg-[#00c896]/15 text-[#b8f5e0]" : "border-white/10 bg-white/5 text-white/80"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                   <input
                     value={slippage}
                     onChange={(e) => setSlippage(e.target.value)}
@@ -400,292 +542,71 @@ export default function SwapPage() {
                       const n = Number(slippage);
                       if (Number.isFinite(n) && n > 0 && n < 1) saveTradingPreferences({ slippageDecimal: slippage });
                     }}
-                    placeholder="0.005"
-                    style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: "white" }}
+                    placeholder="Custom"
+                    className="w-24 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white outline-none focus:border-[#00c896]/40"
                   />
-                </div>
-              </div>
-
-              {showLdxQuickPairs ? (
-                <div style={{ display: "grid", gap: 8 }}>
-                  <div style={{ fontSize: 12, opacity: 0.82 }}>LDX quick pairs (BSC) — needs AMM + 0x liquidity</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    <Button variant="secondary" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setLdxPair("LDX", "USDT")}>
-                      LDX → USDT
-                    </Button>
-                    <Button variant="secondary" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setLdxPair("USDT", "LDX")}>
-                      USDT → LDX
-                    </Button>
-                    <Button variant="secondary" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setLdxPair("LDX", "BNB")}>
-                      LDX → BNB
-                    </Button>
-                    <Button variant="secondary" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setLdxPair("BNB", "LDX")}>
-                      BNB → LDX
-                    </Button>
-                    <Button variant="secondary" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setLdxPair("LDX", "ETH")}>
-                      LDX → ETH
-                    </Button>
-                    <Button variant="secondary" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setLdxPair("ETH", "LDX")}>
-                      ETH → LDX
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>From</div>
-                  <select
-                    value={sellToken}
-                    onChange={(e) => {
-                      setSellToken(e.target.value);
-                      setQuote(null);
-                      setQuoteError(null);
-                    }}
-                    style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: "white" }}
-                  >
-                    {presets.map((t) => (
-                      <option key={`sell-${t.symbol}-${t.address}`} value={t.address}>
-                        {t.name && t.name !== t.symbol ? `${t.name} (${t.symbol})` : t.symbol}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>To</div>
-                  <select
-                    value={buyToken}
-                    onChange={(e) => {
-                      setBuyToken(e.target.value);
-                      setQuote(null);
-                      setQuoteError(null);
-                    }}
-                    style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: "white" }}
-                  >
-                    {presets.map((t) => (
-                      <option key={`buy-${t.symbol}-${t.address}`} value={t.address}>
-                        {t.name && t.name !== t.symbol ? `${t.name} (${t.symbol})` : t.symbol}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>Amount</div>
-                  <input
-                    value={sellAmountBase}
-                    onChange={(e) => setSellAmountBase(e.target.value)}
-                    placeholder="0.01"
-                    style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: "white" }}
-                  />
-                </div>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>Preview</div>
-                  <div style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)" }}>
-                    {(sellPreset?.name && sellPreset.name !== sellPreset.symbol
-                      ? `${sellPreset.name} (${sellPreset.symbol})`
-                      : sellPreset?.symbol) || "Token"}{" "}
-                    →{" "}
-                    {(buyPreset?.name && buyPreset.name !== buyPreset.symbol
-                      ? `${buyPreset.name} (${buyPreset.symbol})`
-                      : buyPreset?.symbol) || "Token"}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ fontSize: 12, opacity: 0.75 }}>
-                  Quote: <span style={{ opacity: 0.95 }}>{quote ? "Ready" : loading ? "Loading..." : "—"}</span>{" "}
-                  {quote?.allowanceTarget ? (
-                    <span style={{ marginLeft: 8, opacity: 0.85 }}>
-                      Allowance:{" "}
-                      {allowanceOk === null ? "—" : allowanceOk ? "OK" : "Needs approval"}
-                    </span>
-                  ) : null}
-                </div>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  <Button
-                    variant="secondary"
-                    onClick={() => refreshAllowance()}
-                  >
-                    Check Allowance
-                  </Button>
-                  <Button onClick={requestQuote}>{loading ? "Quoting..." : "Get Quote"}</Button>
-                </div>
-              </div>
-
-              {quote ? (
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <Button
-                    variant="secondary"
-                    onClick={approveIfNeeded}
-                  >
-                    {sending === "approving" ? "Approving..." : "Approve"}
-                  </Button>
-                  <Button onClick={signAndSwap}>
-                    {sending === "swapping" ? "Swapping..." : "Sign & Swap"}
-                  </Button>
-                </div>
-              ) : null}
-
-              {txHash ? (
-                <div style={{ fontSize: 12, opacity: 0.8 }}>
-                  Tx: <span style={{ opacity: 0.95 }}>{txHash}</span>
-                  {txUrl(chainId, txHash) ? (
-                    <a
-                      href={txUrl(chainId, txHash) as string}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ marginLeft: 10, color: "white", opacity: 0.85 }}
-                    >
-                      View on explorer →
-                    </a>
-                  ) : null}
                 </div>
               ) : null}
             </div>
-          </Card>
-        </Span>
 
-        <Span col={isCex ? 5 : 6}>
-          {!isCex ? (
-            <Card title="Transaction status" tone="info">
-              <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.5 }}>
-                Waiting for wallet connection and quote.
-                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
-                  DEX mode hides orderbook/charts/custodial actions.
-                </div>
+            <div className="mt-4 space-y-1 text-xs text-gray-400">
+              <div>Price impact: {priceImpactDisplay()}</div>
+              <div>Routing: 0x Aggregator</div>
+              <div>
+                Network fee:{" "}
+                {quote?.transaction?.gas ? `~${String(quote.transaction.gas)} gas` : "Estimated at send time"}
               </div>
-            </Card>
-          ) : (
-            <ResponsivePanels
-              tabs={[
-                { id: "status", label: "Status" },
-                { id: "chart", label: "Mini chart" },
-                { id: "routing", label: "Routing" },
-                { id: "fees", label: "Fees" }
-              ] as const}
-              renderMobile={(active) => (
-                <Grid columns={12} gap={12}>
-                  <Span col={12}>
-                    {active === "status" ? (
-                      <Card title="Transaction status" tone="info">
-                        <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.5 }}>
-                          {quoteError ? `Error: ${quoteError}` : quote ? "Quote loaded. Ready to sign tx (next step)." : "Get a quote to continue."}
-                        </div>
-                      </Card>
-                    ) : null}
-                    {active === "chart" ? (
-                      <Card title="Mini chart" tone="success">
-                        <div style={{ height: 180, borderRadius: 12, border: "1px dashed rgba(255,255,255,0.18)", display: "grid", placeItems: "center", opacity: 0.75 }}>
-                          Chart placeholder
-                        </div>
-                      </Card>
-                    ) : null}
-                    {active === "routing" ? (
-                      <Card title="Routing / Depth" tone="success">
-                        <div style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.6 }}>
-                          {quote?.route?.fills?.length
-                            ? `Fills: ${quote.route.fills.length}`
-                            : quote
-                              ? "Route available (details depend on 0x response)."
-                              : "Get a quote to view routing."}
-                        </div>
-                      </Card>
-                    ) : null}
-                    {active === "fees" ? (
-                      <Card title="Summary" tone="success" right={<Pill>Quote</Pill>}>
-                        {!quote ? (
-                          <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.5 }}>Get a quote to view summary.</div>
-                        ) : (
-                          <div style={{ display: "grid", gap: 8, fontSize: 13, opacity: 0.88, lineHeight: 1.5 }}>
-                            <div>
-                              Estimated output:{" "}
-                              <b>
-                                {formatUnits(quote.buyAmount, buyDecimals)} {buyPreset?.symbol || "Token"}
-                              </b>
-                            </div>
-                            <div>
-                              Platform fee (0.5%):{" "}
-                              <b>
-                                {quote?.fees?.integratorFee?.amount
-                                  ? `${formatUnits(quote.fees.integratorFee.amount, buyDecimals)} ${buyPreset?.symbol || "Token"}`
-                                  : "—"}
-                              </b>
-                            </div>
-                            <div>
-                              0x fee:{" "}
-                              <b>
-                                {quote?.fees?.zeroExFee?.amount
-                                  ? `${formatUnits(quote.fees.zeroExFee.amount, buyDecimals)} ${buyPreset?.symbol || "Token"}`
-                                  : "—"}
-                              </b>
-                            </div>
-                            <div style={{ fontSize: 12, opacity: 0.75 }}>
-                              Sell amount: {formatUnits(quote.sellAmount, sellDecimals)} {sellPreset?.symbol || "Token"}
-                            </div>
-                            {quote?.transaction?.gas ? (
-                              <div style={{ fontSize: 12, opacity: 0.75 }}>Estimated gas: {quote.transaction.gas}</div>
-                            ) : null}
-                          </div>
-                        )}
-                      </Card>
-                    ) : null}
-                  </Span>
-                </Grid>
-              )}
-            >
-              <Card title="Transaction status" tone="info">
-                <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.5 }}>
-                  {quoteError ? `Error: ${quoteError}` : quote ? "Quote loaded. Next: wallet signing (Phase 1+)." : "Click Get Quote to fetch a 0x quote."}
-                  <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
-                    In CEX mode, optional panels can appear for routing, chart, and fee tier preview.
-                  </div>
+              {quote?.allowanceTarget ? (
+                <div className="text-white/50">
+                  Allowance: {allowanceOk === null ? "Checking…" : allowanceOk ? "Ready" : "Approval required"}
                 </div>
-              </Card>
+              ) : null}
+            </div>
 
-              <div style={{ marginTop: 12 }}>
-                <Card title="Summary" tone="success" right={<Pill>Quote</Pill>}>
-                  {!quote ? (
-                    <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.5 }}>Get a quote to view summary.</div>
-                  ) : (
-                    <div style={{ display: "grid", gap: 8, fontSize: 13, opacity: 0.88, lineHeight: 1.5 }}>
-                      <div>
-                        Estimated output:{" "}
-                        <b>
-                          {formatUnits(quote.buyAmount, buyDecimals)} {buyPreset?.symbol || "Token"}
-                        </b>
-                      </div>
-                      <div>
-                        Platform fee (0.5%):{" "}
-                        <b>
-                          {quote?.fees?.integratorFee?.amount
-                            ? `${formatUnits(quote.fees.integratorFee.amount, buyDecimals)} ${buyPreset?.symbol || "Token"}`
-                            : "—"}
-                        </b>
-                      </div>
-                      <div>
-                        0x fee:{" "}
-                        <b>
-                          {quote?.fees?.zeroExFee?.amount
-                            ? `${formatUnits(quote.fees.zeroExFee.amount, buyDecimals)} ${buyPreset?.symbol || "Token"}`
-                            : "—"}
-                        </b>
-                      </div>
-                      <div style={{ fontSize: 12, opacity: 0.75 }}>
-                        Sell amount: {formatUnits(quote.sellAmount, sellDecimals)} {sellPreset?.symbol || "Token"}
-                      </div>
-                      {quote?.transaction?.gas ? (
-                        <div style={{ fontSize: 12, opacity: 0.75 }}>Estimated gas: {quote.transaction.gas}</div>
-                      ) : null}
-                    </div>
-                  )}
-                </Card>
+            {quoteError ? <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200/95">{quoteError}</div> : null}
+
+            <div className="mt-4">
+              <button
+                type="button"
+                disabled={
+                  loading ||
+                  sending !== "idle" ||
+                  (Boolean(quote?.allowanceTarget) && allowanceOk === null && Boolean(quote))
+                }
+                onClick={() => {
+                  if (!quote) void requestQuote();
+                  else if (quote.allowanceTarget && allowanceOk === false) void approveIfNeeded();
+                  else void signAndSwap();
+                }}
+                className="w-full rounded-xl bg-gradient-to-r from-emerald-400 to-sky-500 py-3 text-center text-sm font-semibold text-[#04120c] shadow-lg shadow-emerald-500/15 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {loading
+                  ? "Fetching best price…"
+                  : sending === "approving"
+                    ? "Approving…"
+                    : sending === "swapping"
+                      ? "Confirm in wallet…"
+                      : !quote
+                        ? "Get Best Price"
+                        : quote.allowanceTarget && allowanceOk === false
+                          ? "Approve token"
+                          : quote.allowanceTarget && allowanceOk === null
+                            ? "Checking allowance…"
+                            : "Swap Now"}
+              </button>
+            </div>
+
+            {txHash ? (
+              <div className="mt-3 text-xs text-white/70">
+                Tx: <span className="font-mono text-white/90">{txHash.slice(0, 10)}…</span>
+                {txUrl(chainId, txHash) ? (
+                  <a href={txUrl(chainId, txHash) as string} target="_blank" rel="noreferrer" className="ml-2 text-[#7aa7ff] hover:underline">
+                    View on explorer
+                  </a>
+                ) : null}
               </div>
-            </ResponsivePanels>
-          )}
+            ) : null}
+          </div>
         </Span>
       </Grid>
     </PageShell>

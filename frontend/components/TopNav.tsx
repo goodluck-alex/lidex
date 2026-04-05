@@ -93,6 +93,7 @@ export function TopNav() {
       <NavLink href="/markets" label="Markets" />
       <NavLink href="/cex/trade" label="Trade" />
       <NavLink href="/dex/swap" label="Swap" />
+      <NavLink href="/p2p" label="P2P" />
       <Link
         href={isCex ? "/staking" : "/referral"}
         className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"
@@ -107,6 +108,7 @@ export function TopNav() {
       <NavLink className="block w-full py-2.5" href="/markets" label="Markets" />
       <NavLink className="block w-full py-2.5" href="/cex/trade" label="Trade" />
       <NavLink className="block w-full py-2.5" href="/dex/swap" label="Swap" />
+      <NavLink className="block w-full py-2.5" href="/p2p" label="P2P" />
       <Link
         href={isCex ? "/staking" : "/referral"}
         className="block w-full rounded-lg py-2.5 text-sm font-medium text-white/90 hover:bg-white/10"

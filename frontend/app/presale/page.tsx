@@ -427,7 +427,7 @@ export default function PresalePage() {
   return (
     <PageShell
       title="LDX launch"
-      subtitle="Phase 2 — presale, liquidity, and trading pairs (LDX / USDT, ETH, BNB on BSC)."
+      subtitle="LDX presale schedule, token info, and on-chain purchase on BSC."
     >
       <Grid>
         <Span col={12}>
@@ -464,7 +464,7 @@ export default function PresalePage() {
               </Span>
 
               <Span col={isCex ? 6 : 12}>
-                <Card title="Presale" right={<Pill tone={data.presale.active ? "success" : "info"}>Phase 2</Pill>}>
+                <Card title="Presale" right={<Pill tone={data.presale.active ? "success" : "info"}>{data.presale.active ? "Active" : "Inactive"}</Pill>}>
                   <div style={{ fontSize: 13, lineHeight: 1.55, opacity: 0.9 }}>{data.presale.instructions}</div>
                   <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 10 }}>
                     {data.presale.contractAddress ? (

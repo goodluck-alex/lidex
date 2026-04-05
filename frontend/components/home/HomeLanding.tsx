@@ -100,7 +100,7 @@ const SERVICE_GROUPS: { category: string; items: ServiceItem[] }[] = [
     category: "Platform",
     items: [
       { icon: "🏛️", label: "Governance", href: "/governance" },
-      { icon: "🤝", label: "P2P", href: "/docs" }
+      { icon: "🤝", label: "P2P", href: "/p2p" }
     ]
   }
 ];
@@ -114,7 +114,7 @@ const compactLabelClass = "max-w-[4.5rem] text-[10px] font-semibold leading-tigh
 const FALLBACK_NEWS: { tag: string; title: string; desc: string; href: string }[] = [
   {
     tag: "Lidex Updates",
-    title: "Hybrid DEX + CEX roadmap",
+    title: "Swap and trade in one platform",
     desc: "Switch modes anytime — same account, one platform.",
     href: "/docs"
   },
@@ -133,7 +133,7 @@ const FALLBACK_NEWS: { tag: string; title: string; desc: string; href: string }[
   {
     tag: "Lidex Updates",
     title: "Wallet & security",
-    desc: "Non-custodial swaps via 0x; CEX features when you choose Full mode.",
+    desc: "Non-custodial swaps in lite mode; advanced trading when you switch to full mode in the header.",
     href: "/wallet"
   }
 ];
@@ -257,8 +257,8 @@ function SlideCarousel({
 const ANNOUNCEMENT_SLIDES: { tag: string; title: string; desc: string; href: string }[] = [
   {
     tag: "Platform",
-    title: "DEX & CEX in one place",
-    desc: "Use DEX Lite for swaps or switch to CEX Full for order books, staking, and launchpad — toggle anytime in the header.",
+    title: "Lite and full trading in one place",
+    desc: "Use lite mode for swaps or switch to full trading for order books, staking, and launchpad — toggle anytime in the header.",
     href: "/docs"
   },
   {
@@ -276,7 +276,7 @@ const ANNOUNCEMENT_SLIDES: { tag: string; title: string; desc: string; href: str
   {
     tag: "Security",
     title: "Wallet & custody options",
-    desc: "Non-custodial swaps where supported; custodial features when you choose Full mode.",
+    desc: "Self-custody where supported; optional custodial balances when you use full trading mode.",
     href: "/wallet"
   },
   {
@@ -498,7 +498,7 @@ export function HomeLanding() {
               <span className="bg-gradient-to-r from-[#2979ff] to-[#00c896] bg-clip-text text-transparent">Lidex Exchange</span>
             </h1>
             <p className="mt-4 max-w-xl text-base text-white/70 sm:text-lg">
-              Switch between DEX &amp; CEX in one powerful platform
+              Lite swaps and full trading in one account — switch anytime.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <button
@@ -509,7 +509,7 @@ export function HomeLanding() {
                 }}
                 className="rounded-xl bg-[#00c896] px-6 py-3 text-sm font-bold text-[#0b0f1a] shadow-lg shadow-[#00c896]/20 transition hover:bg-[#00e0a8]"
               >
-                DEX
+                Lite — Swap
               </button>
               <button
                 type="button"
@@ -519,7 +519,7 @@ export function HomeLanding() {
                 }}
                 className="rounded-xl border border-[#2979ff]/50 bg-[#2979ff]/15 px-6 py-3 text-sm font-bold text-white transition hover:bg-[#2979ff]/25"
               >
-                CEX
+                Full — Trade
               </button>
             </div>
           </div>

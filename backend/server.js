@@ -20,6 +20,7 @@ const govSignalService = require("./modules/governance/govSignal.service");
 const marginService = require("./modules/margin/margin.service");
 const tokenPresets = require("./modules/tokens/tokens.presets");
 const listingsService = require("./modules/listings/listings.service");
+const p2pService = require("./modules/p2p/p2p.service");
 const { registerAdminRoutes, requireAdminApiKey } = require("../admin");
 const { publicConfig: cexPublicConfig } = require("./modules/cex/cex.config");
 const { issueNonce, consumeNonce } = require("./modules/auth/auth.nonce");
@@ -273,6 +274,11 @@ app.get("/v1/pairs", requireLidexMode, requireCexMode, async (req, res) => {
 });
 
 function requireCexUser(req, res, next) {
+  if (!req.user?.id) return res.status(401).json({ ok: false, error: "not authenticated" });
+  next();
+}
+
+function requireAuthUser(req, res, next) {
   if (!req.user?.id) return res.status(401).json({ ok: false, error: "not authenticated" });
   next();
 }
@@ -940,6 +946,219 @@ app.post("/v1/swap/execute", requireLidexMode, requireDexMode, swapExecuteLimite
     res.json(result);
   } catch (e) {
     res.status(e?.statusCode || 500).json({ ok: false, error: e?.message || "swap execute failed", details: e?.details });
+  }
+});
+
+// P2P — fiat ↔ crypto marketplace (wallet session; works in DEX or CEX mode)
+app.get("/v1/p2p/ads", requireLidexMode, async (req, res) => {
+  try {
+    const result = await p2pService.listAds({ query: req.query || {} });
+    res.json(result);
+  } catch (e) {
+    const code = e?.code;
+    if (code === "BAD_REQUEST") return res.status(400).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e?.message || "p2p ads failed" });
+  }
+});
+
+app.post("/v1/p2p/express/match", requireLidexMode, async (req, res) => {
+  try {
+    const result = await p2pService.expressMatch({ body: req.body || {} });
+    res.json(result);
+  } catch (e) {
+    const code = e?.code;
+    if (code === "BAD_REQUEST") return res.status(400).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e?.message || "express match failed" });
+  }
+});
+
+app.post("/v1/p2p/ads", cexWriteLimiter, requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.createAd({ user: req.user, body: req.body || {} });
+    res.json(result);
+  } catch (e) {
+    const code = e?.code;
+    if (code === "UNAUTHORIZED") return res.status(401).json({ ok: false, error: e.message });
+    if (code === "BAD_REQUEST") return res.status(400).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e?.message || "create ad failed" });
+  }
+});
+
+app.get("/v1/p2p/ads/mine", requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.listMyAds({ user: req.user });
+    res.json(result);
+  } catch (e) {
+    const code = e?.code;
+    if (code === "UNAUTHORIZED") return res.status(401).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e?.message || "list ads failed" });
+  }
+});
+
+app.patch("/v1/p2p/ads/:id", cexWriteLimiter, requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.updateAd({ user: req.user, adId: req.params.id, body: req.body || {} });
+    if (result.ok === false) return res.status(400).json(result);
+    res.json(result);
+  } catch (e) {
+    const code = e?.code;
+    if (code === "UNAUTHORIZED") return res.status(401).json({ ok: false, error: e.message });
+    if (code === "BAD_REQUEST") return res.status(400).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e?.message || "update ad failed" });
+  }
+});
+
+app.delete("/v1/p2p/ads/:id", cexWriteLimiter, requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.deleteAd({ user: req.user, adId: req.params.id });
+    if (result.ok === false) return res.status(400).json(result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "delete ad failed" });
+  }
+});
+
+app.post("/v1/p2p/orders", cexWriteLimiter, requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.createOrder({ user: req.user, body: req.body || {} });
+    res.json(result);
+  } catch (e) {
+    const code = e?.code;
+    if (code === "UNAUTHORIZED") return res.status(401).json({ ok: false, error: e.message });
+    if (code === "BAD_REQUEST") return res.status(400).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e?.message || "create order failed" });
+  }
+});
+
+app.get("/v1/p2p/orders", requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.listMyOrders({ user: req.user });
+    res.json(result);
+  } catch (e) {
+    const code = e?.code;
+    if (code === "UNAUTHORIZED") return res.status(401).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e?.message || "list orders failed" });
+  }
+});
+
+app.get("/v1/p2p/orders/:id", requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.getOrder({ user: req.user, orderId: req.params.id });
+    if (result.ok === false) return res.status(404).json(result);
+    res.json(result);
+  } catch (e) {
+    const code = e?.code;
+    if (code === "UNAUTHORIZED") return res.status(401).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e?.message || "order failed" });
+  }
+});
+
+app.post("/v1/p2p/orders/:id/paid", cexWriteLimiter, requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.markPaid({ user: req.user, orderId: req.params.id });
+    if (result.ok === false) return res.status(400).json(result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "mark paid failed" });
+  }
+});
+
+app.post("/v1/p2p/orders/:id/confirm", cexWriteLimiter, requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.confirmRelease({ user: req.user, orderId: req.params.id });
+    if (result.ok === false) return res.status(400).json(result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "confirm failed" });
+  }
+});
+
+app.post("/v1/p2p/orders/:id/cancel", cexWriteLimiter, requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.cancelOrder({ user: req.user, orderId: req.params.id });
+    if (result.ok === false) return res.status(400).json(result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "cancel failed" });
+  }
+});
+
+app.get("/v1/p2p/orders/:id/messages", requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.listMessages({ user: req.user, orderId: req.params.id });
+    if (result.ok === false) return res.status(404).json(result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "messages failed" });
+  }
+});
+
+app.post("/v1/p2p/orders/:id/messages", cexWriteLimiter, requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.postMessage({ user: req.user, orderId: req.params.id, body: req.body || {} });
+    if (result.ok === false) return res.status(400).json(result);
+    res.json(result);
+  } catch (e) {
+    const code = e?.code;
+    if (code === "BAD_REQUEST") return res.status(400).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e?.message || "post message failed" });
+  }
+});
+
+app.get("/v1/p2p/payment-methods", requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.listPaymentMethods({ user: req.user });
+    res.json(result);
+  } catch (e) {
+    const code = e?.code;
+    if (code === "UNAUTHORIZED") return res.status(401).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e?.message || "payment methods failed" });
+  }
+});
+
+app.post("/v1/p2p/payment-methods", cexWriteLimiter, requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.createPaymentMethod({ user: req.user, body: req.body || {} });
+    res.json(result);
+  } catch (e) {
+    const code = e?.code;
+    if (code === "BAD_REQUEST") return res.status(400).json({ ok: false, error: e.message });
+    if (code === "UNAUTHORIZED") return res.status(401).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e?.message || "create payment method failed" });
+  }
+});
+
+app.delete("/v1/p2p/payment-methods/:id", cexWriteLimiter, requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.deletePaymentMethod({ user: req.user, id: req.params.id });
+    if (result.ok === false) return res.status(404).json(result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "delete payment method failed" });
+  }
+});
+
+app.post("/v1/p2p/merchant/apply", cexWriteLimiter, requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.applyMerchant({ user: req.user, body: req.body || {} });
+    if (result.ok === false) return res.status(400).json(result);
+    res.json(result);
+  } catch (e) {
+    const code = e?.code;
+    if (code === "BAD_REQUEST") return res.status(400).json({ ok: false, error: e.message });
+    if (code === "UNAUTHORIZED") return res.status(401).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e?.message || "merchant apply failed" });
+  }
+});
+
+app.get("/v1/p2p/merchant/status", requireLidexMode, requireAuthUser, async (req, res) => {
+  try {
+    const result = await p2pService.merchantStatus({ user: req.user });
+    res.json(result);
+  } catch (e) {
+    const code = e?.code;
+    if (code === "UNAUTHORIZED") return res.status(401).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e?.message || "merchant status failed" });
   }
 });
 

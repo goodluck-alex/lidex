@@ -164,18 +164,15 @@ export default function LaunchpadPage() {
   return (
     <PageShell
       title="Launchpad"
-      subtitle={`CEX: buy launch allocations with custodial ${quote}. Credits a separate offer asset (internal balance). Enable with LAUNCHPAD_ENABLED=true.`}
+      subtitle={`Participate in token sales using your ${quote} balance. Allocations credit as the offered asset in your account.`}
     >
       {!isCex ? (
         <Card title="Mode">
           <div style={{ opacity: 0.9 }}>Open Launchpad in CEX mode.</div>
         </Card>
       ) : !enabled ? (
-        <Card title="Launchpad" right={<Pill tone="info">Off</Pill>}>
-          <div style={{ opacity: 0.9 }}>
-            Backend flag <b>LAUNCHPAD_ENABLED</b> is not true. Ops can create sales via{" "}
-            <code style={{ fontSize: 12 }}>POST /v1/admin/launchpad/sales</code> with <b>ADMIN_API_KEY</b>.
-          </div>
+        <Card title="Launchpad" right={<Pill tone="info">Unavailable</Pill>}>
+          <div style={{ opacity: 0.9 }}>Launchpad is not available on this deployment yet.</div>
         </Card>
       ) : (
         <Grid>

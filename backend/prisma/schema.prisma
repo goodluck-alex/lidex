@@ -26,8 +26,128 @@ model User {
   launchpadAllocations    LaunchpadAllocation[]
   govSignalVotes         GovSignalVote[]
   cexMarginPositions    CexMarginPosition[]
+  p2pPaymentMethods     P2pPaymentMethod[]
+  p2pMerchantApplications P2pMerchantApplication[]
+  p2pMerchantProfile    P2pMerchantProfile?
+  p2pAds                P2pAd[]
+  p2pOrdersAsBuyer      P2pOrder[]              @relation("P2pOrderBuyer")
+  p2pOrdersAsSeller     P2pOrder[]              @relation("P2pOrderSeller")
+  p2pChatMessages       P2pChatMessage[]
 
   @@map("users")
+}
+
+/// Fiat payment profile for P2P (MTN, bank, etc.).
+model P2pPaymentMethod {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  type           String
+  label          String
+  accountName    String   @map("account_name")
+  accountValue   String   @map("account_value")
+  instructions   String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("p2p_payment_methods")
+}
+
+model P2pMerchantApplication {
+  id                  String   @id @default(cuid())
+  userId              String   @map("user_id")
+  fullName            String   @map("full_name")
+  email               String
+  country             String
+  tradingExperience   String   @map("trading_experience") @db.Text
+  reason              String   @db.Text
+  status              String   @default("pending")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status, createdAt])
+  @@map("p2p_merchant_applications")
+}
+
+model P2pMerchantProfile {
+  userId    String   @id @map("user_id")
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("p2p_merchant_profiles")
+}
+
+/// side: sell = poster sells crypto for fiat; buy = poster buys crypto with fiat.
+model P2pAd {
+  id                 String   @id @default(cuid())
+  userId             String   @map("user_id")
+  side               String
+  tokenSymbol        String   @map("token_symbol")
+  fiatCurrency       String   @map("fiat_currency")
+  priceType          String   @map("price_type")
+  price              String
+  amountMin          String   @map("amount_min")
+  amountMax          String   @map("amount_max")
+  paymentMethodLabel String   @map("payment_method_label")
+  timeLimitMinutes   Int      @map("time_limit_minutes")
+  terms              String?  @db.Text
+  status             String   @default("active")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders P2pOrder[]
+
+  @@index([status, tokenSymbol, fiatCurrency, side])
+  @@index([userId])
+  @@map("p2p_ads")
+}
+
+model P2pOrder {
+  id           String   @id @default(cuid())
+  adId         String   @map("ad_id")
+  buyerUserId  String   @map("buyer_user_id")
+  sellerUserId String   @map("seller_user_id")
+  fiatAmount   String   @map("fiat_amount")
+  tokenAmount  String   @map("token_amount")
+  price        String
+  status       String   @default("awaiting_payment")
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  ad       P2pAd            @relation(fields: [adId], references: [id], onDelete: Restrict)
+  buyer    User             @relation("P2pOrderBuyer", fields: [buyerUserId], references: [id], onDelete: Cascade)
+  seller   User             @relation("P2pOrderSeller", fields: [sellerUserId], references: [id], onDelete: Cascade)
+  messages P2pChatMessage[]
+
+  @@index([buyerUserId, status])
+  @@index([sellerUserId, status])
+  @@index([adId])
+  @@index([expiresAt])
+  @@map("p2p_orders")
+}
+
+model P2pChatMessage {
+  id        String   @id @default(cuid())
+  orderId   String   @map("order_id")
+  userId    String   @map("user_id")
+  body      String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  order P2pOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@map("p2p_chat_messages")
 }
 
 /// Append-only audit of CEX balance movements (paper / simulated in MVP).

@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import React, { Suspense, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMode } from "../../context/mode";
 import { Card, Grid, PageShell, Pill, Span } from "../../components/ui";
@@ -430,11 +431,7 @@ function MarketsPageContent() {
   return (
     <PageShell
       title="Markets"
-      subtitle={
-        isCex
-          ? "Full token list + filters + charts (CEX Full)."
-          : "Phase 1: Top 5 active pairs + LDX pairs shown as Coming Soon (DEX Lite)."
-      }
+      subtitle={isCex ? "Browse pairs, charts, and filters." : "Browse listed pairs and token applications."}
     >
       <MarketsSearchField
         value={searchDraft}
@@ -453,7 +450,7 @@ function MarketsPageContent() {
         <Grid>
           <Span col={12}>
             <Card
-              title="Phase 1 markets"
+              title="Markets"
               right={<Pill>{error ? "Error" : "Lidex pairs"}</Pill>}
               tone={error ? "danger" : "default"}
             >
@@ -528,10 +525,10 @@ function MarketsPageContent() {
           </Span>
 
           <Span col={12}>
-            <Card title="TOKEN/LDX listings (Coming Soon)" right={<Pill tone="info">Phase 7</Pill>}>
+            <Card title="TOKEN/LDX listings" right={<Pill tone="info">Coming soon</Pill>}>
               <div style={{ display: "grid", gap: 10 }}>
                 <div style={{ fontSize: 12, opacity: 0.75, lineHeight: 1.55 }}>
-                  Approved project tokens are shown here as <b>TOKEN/LDX</b> markets per chain. Liquidity is per-chain (Phase 6 Option A).
+                  Approved tokens can appear here as <b>TOKEN/LDX</b> per chain once liquidity and routing are live.
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10, alignItems: "center" }}>
                   <div style={{ fontSize: 12, opacity: 0.8 }}>Chain</div>
@@ -593,7 +590,11 @@ function MarketsPageContent() {
                 )}
 
                 <div style={{ fontSize: 12, opacity: 0.75 }}>
-                  Want to list? Submit at <b>/listings/apply</b>. Pairing with <b>LDX</b> qualifies for free listing incentives.
+                  Want your token listed?{" "}
+                  <Link href="/listings/apply" style={{ color: "#2979ff", textDecoration: "underline" }}>
+                    Submit a listing application
+                  </Link>
+                  . Pairing with <b>LDX</b> may qualify for incentives.
                 </div>
               </div>
             </Card>

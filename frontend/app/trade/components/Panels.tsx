@@ -7,7 +7,7 @@ import { apiDelete, apiGet, apiPost, backendBaseUrl, browserLidexMode, lidexMode
 import { useWallet } from "../../../wallet/useWallet";
 import { useTradeUi, useTradeUiOptional } from "./TradeUiContext";
 
-/** First Phase-1 active pair; chart uses live reference klines (USDT markets) until Lidex lists pairs. */
+/** Default symbol for the trade dashboard chart. */
 export const DEFAULT_TRADE_CHART_SYMBOL = "ETH/USDT";
 
 type StatsResponse = { ok: true; bySymbol: Record<string, { change24hPct: number; volume24hQuote: number }> };
@@ -129,8 +129,7 @@ export function PairHeader({ symbol = DEFAULT_TRADE_CHART_SYMBOL }: { symbol?: s
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex flex-wrap items-baseline gap-2.5">
           <div className="font-black tracking-wide text-white">{symbol}</div>
-          <Pill tone="info">CEX Full</Pill>
-          <div className="text-xs text-white/70">{meta}</div>
+          <div className="text-xs text-gray-400">{meta}</div>
         </div>
         {!matcherReady ? (
           <div className="text-[11px] text-white/50">Loading matcher…</div>
@@ -139,7 +138,7 @@ export function PairHeader({ symbol = DEFAULT_TRADE_CHART_SYMBOL }: { symbol?: s
             <span className="font-semibold text-white/80">Matcher</span> · {matcherLine}
           </div>
         ) : (
-          <div className="text-[11px] text-white/55">Matcher stats unavailable (use CEX mode / check backend).</div>
+          <div className="text-[11px] text-white/55">Unable to load live stats right now.</div>
         )}
       </div>
       <div className="flex items-center gap-2.5">
@@ -191,7 +190,7 @@ export function ChartPanel({ symbol = DEFAULT_TRADE_CHART_SYMBOL }: { symbol?: s
   const sourceLabel = source === "binance" ? "Lidex" : source === "synthetic" ? "Demo (no live market)" : null;
 
   return (
-    <Card title="Chart" right={<Pill tone="info">Lightweight Charts</Pill>}>
+    <Card surface="deep" title="Chart" right={<Pill tone="info">1h</Pill>}>
       <div className="grid gap-2">
         <div className="text-xs text-white/75">
           {err
@@ -216,7 +215,7 @@ export function ChartPanel({ symbol = DEFAULT_TRADE_CHART_SYMBOL }: { symbol?: s
               opacity: 0.9
             }}
           >
-            Could not load candles. Check that the backend is running and <code>/v1/markets/candles</code> is reachable.
+            Could not load the chart. Check your connection and try again.
           </div>
         ) : (
           <div
@@ -378,10 +377,11 @@ export function OrderbookPanel() {
 
   return (
     <Card
+      surface="deep"
       title={`Order book (${sym})`}
       right={
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <Pill tone="success">Internal</Pill>
+          <Pill tone="success">Book</Pill>
           <Pill tone={sseLive ? "info" : "muted"}>{sseLive ? "Live" : "Polling"}</Pill>
         </div>
       }
@@ -389,7 +389,7 @@ export function OrderbookPanel() {
       <div style={{ display: "grid", gap: 10 }}>
         {tradeUi ? (
           <div style={{ fontSize: 11, opacity: 0.7 }}>
-            Click depth rows, best bid/ask, or last trade to set the limit price in the order panel.
+            Tap a price level or the last trade to copy it into your limit order.
           </div>
         ) : null}
         {err ? (
@@ -803,11 +803,9 @@ export function BalancesPanel() {
   const pairLabel = cexConfig?.symbol ?? (base && quote ? `${base}/${quote}` : "—");
   const canPaper = cexConfig?.features?.paperTransfers === true;
   const canDevFund = cexConfig?.features?.devFunding === true;
-  const poolMatching =
-    cexConfig?.features?.poolMatchingEnabled === true || cexConfig?.liquidity?.poolMatchingEnabled === true;
 
   return (
-    <Card title={`Balances · ${pairLabel}`} right={<Pill tone="info">Paper</Pill>}>
+    <Card surface="deep" title={`Balances · ${pairLabel}`} right={<Pill tone="info">Account</Pill>}>
       {!cexConfig ? (
         <div style={{ fontSize: 13, opacity: 0.8 }}>Loading CEX config…</div>
       ) : !authed ? (
@@ -831,14 +829,12 @@ export function BalancesPanel() {
             </div>
           </div>
 
-          <div style={{ fontSize: 11, opacity: 0.72, lineHeight: 1.45 }}>
-            Simulated deposit/withdraw: {canPaper ? "enabled on API." : "off (set CEX_PAPER_TRANSFERS)."} Dev credit:{" "}
-            {canDevFund ? "enabled." : "off (set CEX_DEV_FUNDING)."} Pool matching:{" "}
-            {poolMatching ? "limit (after book) & market IOC → pool when price allows." : "off (set CEX_POOL_MATCHING_ENABLED)."} Taker fee:{" "}
-            {(cexConfig.features?.feeBps ?? 0) > 0
-              ? `${cexConfig.features?.feeBps} bps${cexConfig.features?.feeTreasuryConfigured ? " (treasury set)" : " (burn if no treasury)"}.`
-              : "off."}
-          </div>
+          {(cexConfig.features?.feeBps ?? 0) > 0 ? (
+            <div style={{ fontSize: 11, opacity: 0.72, lineHeight: 1.45 }}>
+              Taker fee: {cexConfig.features?.feeBps} basis points
+              {cexConfig.features?.feeTreasuryConfigured ? " (treasury configured)." : "."}
+            </div>
+          ) : null}
 
           {canDevFund ? (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -1170,7 +1166,7 @@ export function OrderEntryPanel() {
     orderKind === "market" ? "Market" : orderKind === "stop_limit" ? "Stop-limit" : "Limit";
 
   return (
-    <Card title="Buy / Sell Panel" right={<Pill>{orderPill}</Pill>}>
+    <Card surface="deep" title="Buy / Sell Panel" right={<Pill>{orderPill}</Pill>}>
       <div style={{ display: "grid", gap: 10 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Button variant={orderKind === "limit" ? "primary" : "secondary"} style={{ fontSize: 12, padding: "8px 12px" }} onClick={() => setOrderKind("limit")}>
@@ -1238,7 +1234,7 @@ export function OrderEntryPanel() {
         </label>
         {orderKind === "market" ? (
           <div style={{ fontSize: 11, lineHeight: 1.45, color: "rgba(255,200,140,0.92)" }}>
-            Market orders are IOC and consume book liquidity immediately (taker if the book has size).
+            Market orders fill immediately at the best available prices on the book.
           </div>
         ) : null}
         {buyCrossesAsk && bookStats?.bestAsk ? (
@@ -1335,11 +1331,6 @@ export function OrderEntryPanel() {
         {limitsHint ? (
           <div style={{ fontSize: 11, opacity: 0.72 }}>{limitsHint}</div>
         ) : null}
-        <div style={{ fontSize: 11, opacity: 0.65 }}>
-          <b>Stop-limit</b> stays off-book until the <b>last internal trade</b> crosses the stop (sell: last ≤ stop; buy: last ≥ stop), then
-          posts your limit. <b>Market</b> is IOC. Min notional applies to limits and executed market size. Internal matcher only — no 0x.
-          Paper funds: <code>POST /v1/cex/dev/fund</code> when <code>CEX_DEV_FUNDING=true</code>.
-        </div>
       </div>
     </Card>
   );
@@ -1521,6 +1512,7 @@ export function OpenOrdersPanel() {
 
   return (
     <Card
+      surface="deep"
       title="Orders"
       right={
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
@@ -1841,6 +1833,7 @@ export function TradeHistoryPanel() {
 
   return (
     <Card
+      surface="deep"
       title="Trade History"
       right={
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>

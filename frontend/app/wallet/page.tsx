@@ -241,11 +241,7 @@ export default function WalletPage() {
   return (
     <PageShell
       title="Wallet"
-      subtitle={
-        isCex
-          ? "CEX Full: custodial + non-custodial balances, deposit/withdraw, internal transfers."
-          : "DEX Lite: non-custodial only (connect wallet, swap-ready)."
-      }
+      subtitle={isCex ? "Custodial and self-custody balances, transfers, and deposits." : "Connect your wallet to trade and track balances."}
     >
       {/* DEX stays minimal; CEX uses responsive dashboard panels */}
       {!isCex ? (
@@ -306,7 +302,7 @@ export default function WalletPage() {
             <Card title="Sign message (login)" tone="info" right={<Pill>Auth</Pill>}>
               <div style={{ display: "grid", gap: 10 }}>
                 <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.5 }}>
-                  This will be used for the Phase‑1 user system (wallet‑signature login).
+                  Sign a message with your wallet to verify ownership and log in.
                 </div>
                 <div style={{ fontSize: 12, opacity: 0.8 }}>
                   Session:{" "}
@@ -338,7 +334,7 @@ export default function WalletPage() {
           <Span col={12}>
             <Card title="DEX mode note" tone="info">
               <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.5 }}>
-                Custodial features (deposit/withdraw/transfer) are disabled in DEX Lite mode.
+                Deposits, withdrawals, and internal transfers need full trading mode.
               </div>
             </Card>
           </Span>

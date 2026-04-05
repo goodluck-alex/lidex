@@ -50,7 +50,7 @@ export default function SettingsPage() {
   return (
     <PageShell
       title="Settings"
-      subtitle={isCex ? "Full settings (includes account management)." : "Lite settings (swap + wallet preferences)."}
+      subtitle="Slippage, theme, and trading preferences."
     >
       <Grid>
         <Span col={6}>

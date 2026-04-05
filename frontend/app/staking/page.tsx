@@ -105,7 +105,7 @@ export default function StakingPage() {
   const stakedAmt = positions?.positions?.[0]?.stakedAmount || "0";
 
   return (
-    <PageShell title="Staking" subtitle="CEX Full: stake LDX (internal balances), view positions, and tier benefits.">
+    <PageShell title="Staking" subtitle="Stake LDX, view positions, and track tier benefits.">
       <Grid>
         <Span col={7}>
           <Card title="Stake LDX" right={<Pill tone="success">Tiers</Pill>}>

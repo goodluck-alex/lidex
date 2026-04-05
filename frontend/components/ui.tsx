@@ -93,19 +93,24 @@ export function Card({
   title,
   right,
   children,
-  tone = "default"
+  tone = "default",
+  surface = "default"
 }: {
   title?: string;
   right?: React.ReactNode;
   children: React.ReactNode;
   tone?: "default" | "success" | "danger" | "info";
+  /** `deep` matches the swap desk shell (#0B0F1A + shadow-xl). */
+  surface?: "default" | "deep";
 }) {
+  const borderCls = surface === "deep" ? "border-white/10" : CARD_TONE_BORDER[tone];
+  const surfaceCls =
+    surface === "deep" ? "bg-[#0B0F1A] shadow-xl" : "bg-white/[0.04] shadow-card backdrop-blur-sm";
+  const headerBorder = surface === "deep" ? "border-white/10" : "border-white/[0.08]";
   return (
-    <section
-      className={`overflow-hidden rounded-2xl border bg-white/[0.04] shadow-card backdrop-blur-sm ${CARD_TONE_BORDER[tone]}`}
-    >
+    <section className={`overflow-hidden rounded-2xl border ${borderCls} ${surfaceCls}`}>
       {title ? (
-        <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-3 py-2.5 sm:px-4">
+        <div className={`flex items-center justify-between gap-3 border-b px-3 py-2.5 sm:px-4 ${headerBorder}`}>
           <div className="text-sm font-semibold tracking-tight text-white/95">{title}</div>
           <div className="shrink-0">{right}</div>
         </div>

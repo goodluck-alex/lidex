@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Grid, PageShell, Pill, Span, Card, Button, SegmentTabs } from "../../components/ui";
+import { Grid, PageShell, Pill, Span, SegmentTabs } from "../../components/ui";
 import {
   BalancesPanel,
   ChartPanel,
@@ -31,17 +31,16 @@ export default function TradePage() {
 
   return (
     <TradeUiProvider>
-    <PageShell title="Trade" subtitle="CEX Full dashboard (desktop 3-column, mobile tabs).">
-      <Card title="CEX matcher" right={<Pill tone="success">Phase 3</Pill>}>
-        <div className="text-[13px] leading-relaxed text-white/85">
-          Limit orders hit an <b>internal matcher</b> for the pair configured on the API (default <code>LDX/USDT</code>).{" "}
-          <b>No 0x</b> on this path. Sign in on the Wallet page. Paper money: <code>CEX_DEV_FUNDING=true</code> (quick credit) and/or{" "}
-          <code>CEX_PAPER_TRANSFERS=true</code> (simulated deposit/withdraw with <code>/v1/cex/ledger</code> audit).
+    <PageShell title="Trade" subtitle="Chart, order book, balances, and spot orders for the active pair.">
+      <div className="mb-4 rounded-2xl border border-white/10 bg-[#0B0F1A] p-5 shadow-xl">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-4">
+          <h2 className="text-lg font-semibold text-white">{DEFAULT_TRADE_CHART_SYMBOL}</h2>
+          <Pill tone="info">Overview</Pill>
         </div>
-      </Card>
-      <Card title={DEFAULT_TRADE_CHART_SYMBOL} right={<Pill tone="info">Orderbook</Pill>}>
-        <PairHeader symbol={DEFAULT_TRADE_CHART_SYMBOL} />
-      </Card>
+        <div className="mt-4">
+          <PairHeader symbol={DEFAULT_TRADE_CHART_SYMBOL} />
+        </div>
+      </div>
 
       <div className="mt-3">
         {/* Mobile: tabbed panels */}
@@ -65,7 +64,7 @@ export default function TradePage() {
           <Grid>
             <Span col={6}>
               <ChartPanel symbol={DEFAULT_TRADE_CHART_SYMBOL} />
-              <div style={{ marginTop: 12 }}>
+              <div className="mt-3">
                 <OpenOrdersPanel />
               </div>
             </Span>
@@ -76,10 +75,10 @@ export default function TradePage() {
 
             <Span col={3}>
               <BalancesPanel />
-              <div style={{ marginTop: 12 }}>
+              <div className="mt-3">
                 <OrderEntryPanel />
               </div>
-              <div style={{ marginTop: 12 }}>
+              <div className="mt-3">
                 <TradeHistoryPanel />
               </div>
             </Span>

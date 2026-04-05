@@ -89,7 +89,7 @@ export default function TokenListingApplyPage() {
     >
       <Grid>
         <Span col={7}>
-          <Card title="Application" right={<Pill tone="info">Phase 7</Pill>}>
+          <Card title="Application" right={<Pill tone="info">Review</Pill>}>
             <div style={{ display: "grid", gap: 10 }}>
               <input
                 value={projectName}
@@ -181,8 +181,7 @@ export default function TokenListingApplyPage() {
                 checks (minimum total supply and matching symbol/decimals). Otherwise your submission stays in the manual queue.
               </div>
               <div style={{ marginTop: 8, fontSize: 12, opacity: 0.78 }}>
-                Liquidity is per-chain (Phase 6 Option A). After you deploy liquidity on the target chain and 0x can route it,
-                the pair can be activated in markets.
+                Liquidity is per chain. Once liquidity is live and routing is available, your pair can be activated for trading.
               </div>
             </div>
           </Card>
