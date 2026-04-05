@@ -1,7 +1,8 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMode } from "../../context/mode";
 import { Card, Grid, PageShell, Pill, Span } from "../../components/ui";
 import { ResponsivePanels } from "../../components/ResponsivePanels";
@@ -109,9 +110,89 @@ type Pair = {
   baseToken?: MarketTokenMeta;
   quoteToken?: MarketTokenMeta;
 };
+
+function pairMatchesQuery(p: Pair, q: string) {
+  if (!q) return true;
+  const blob = [p.symbol, p.base, p.quote, p.baseToken?.name, p.baseToken?.symbol, p.quoteToken?.name, p.quoteToken?.symbol]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return blob.includes(q);
+}
+
+function listedTokenMatches(
+  t: { symbol: string; address: string; decimals: number; featured: boolean; name?: string; logoUrl?: string | null },
+  q: string
+) {
+  if (!q) return true;
+  return `${t.symbol} ${t.name || ""} ${t.address}`.toLowerCase().includes(q);
+}
+
+function MarketsSearchField({
+  value,
+  onChange,
+  onApply,
+  onClear,
+  hasFilter
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onApply: () => void;
+  onClear: () => void;
+  hasFilter: boolean;
+}) {
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onApply();
+      }}
+      className="mb-4 flex flex-wrap items-center gap-2.5"
+    >
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search pairs by symbol or name…"
+        aria-label="Filter markets"
+        className="min-h-11 min-w-[200px] flex-1 rounded-xl border border-white/12 bg-black/25 px-3 text-sm text-white placeholder:text-white/35 focus:border-[#00c896]/45 focus:outline-none focus:ring-1 focus:ring-[#00c896]/35"
+      />
+      <button
+        type="submit"
+        className="min-h-11 shrink-0 rounded-xl border border-emerald-950/30 bg-[#00c896] px-4 text-sm font-bold text-[#04120c] transition-opacity hover:opacity-90"
+      >
+        Search
+      </button>
+      {hasFilter ? (
+        <button
+          type="button"
+          onClick={onClear}
+          className="min-h-11 shrink-0 rounded-xl border border-white/15 bg-transparent px-4 text-sm font-semibold text-white/90 transition-colors hover:border-white/25 hover:bg-white/[0.06]"
+        >
+          Clear
+        </button>
+      ) : null}
+    </form>
+  );
+}
 type PairsResponse = { ok: true; active: Pair[]; comingSoon: Pair[] };
 type Stat = { symbol: string; price: number; change24hPct: number; volume24hQuote: number; updatedAt: number };
 type StatsResponse = { ok: true; items: Stat[]; bySymbol: Record<string, Stat>; updatedAt: number };
+
+/** POST `/api/markets/coingecko/enrich` — reference USD snapshot per listed pair symbol. */
+type RefEnrichRow = { price: number; change24hPct: number; volume24hQuote: number };
+type RefEnrichResponse = { ok: true; byPairSymbol: Record<string, RefEnrichRow>; updatedAt: number };
+
+function mergePairStats(
+  symbol: string,
+  backend: StatsResponse | null,
+  refMap: Record<string, RefEnrichRow> | null | undefined
+): { price: number | undefined; change24hPct: number | undefined; volume24hQuote: number | undefined } {
+  const r = refMap?.[symbol];
+  if (r) return { price: r.price, change24hPct: r.change24hPct, volume24hQuote: r.volume24hQuote };
+  const b = backend?.bySymbol?.[symbol];
+  if (b) return { price: b.price, change24hPct: b.change24hPct, volume24hQuote: b.volume24hQuote };
+  return { price: undefined, change24hPct: undefined, volume24hQuote: undefined };
+}
 type CandlesResponse = {
   ok: true;
   symbol: string;
@@ -137,6 +218,23 @@ function fmtVol(n: number | null | undefined) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(Math.round(n));
+}
+
+function MarketsEnrichErrorBanner({ err }: { err: string | null }) {
+  if (!err) return null;
+  return (
+    <div
+      style={{
+        fontSize: 11,
+        opacity: 0.62,
+        lineHeight: 1.45,
+        marginBottom: 10,
+        maxWidth: 780
+      }}
+    >
+      Reference feed unavailable ({err}) — demo figures from Lidex are shown where no snapshot exists.
+    </div>
+  );
 }
 
 function PairPicker({
@@ -171,9 +269,14 @@ function PairPicker({
   );
 }
 
-export default function MarketsPage() {
+function MarketsPageContent() {
   const { mode } = useMode();
   const isCex = mode === "cex";
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const qRaw = searchParams?.get("q")?.trim() ?? "";
+  const q = qRaw.toLowerCase();
+  const [searchDraft, setSearchDraft] = useState(qRaw);
   const [pairs, setPairs] = useState<PairsResponse | null>(null);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -186,6 +289,8 @@ export default function MarketsPage() {
   const [selected, setSelected] = useState<string>("ETH/USDT");
   const [candles, setCandles] = useState<CandlesResponse | null>(null);
   const [candlesError, setCandlesError] = useState<string | null>(null);
+  const [refEnrichMap, setRefEnrichMap] = useState<Record<string, RefEnrichRow> | null>(null);
+  const [refEnrichErr, setRefEnrichErr] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -208,6 +313,47 @@ export default function MarketsPage() {
       cancelled = true;
     };
   }, [userKey]);
+
+  useEffect(() => {
+    if (!pairs) {
+      setRefEnrichMap(null);
+      setRefEnrichErr(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        setRefEnrichErr(null);
+        const list = [...(pairs.active || []), ...(pairs.comingSoon || [])];
+        if (list.length === 0) {
+          setRefEnrichMap({});
+          return;
+        }
+        const res = await fetch("/api/markets/coingecko/enrich", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pairs: list.map((p) => ({ symbol: p.symbol, base: p.base, quote: p.quote }))
+          })
+        });
+        const data = (await res.json()) as RefEnrichResponse | { ok: false; error?: string };
+        if (cancelled) return;
+        if (!data.ok) {
+          setRefEnrichMap(null);
+          setRefEnrichErr(data.error || "Reference data unavailable");
+          return;
+        }
+        setRefEnrichMap(data.byPairSymbol);
+      } catch (e) {
+        if (cancelled) return;
+        setRefEnrichMap(null);
+        setRefEnrichErr(e instanceof Error ? e.message : "Reference data failed");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pairs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -238,6 +384,22 @@ export default function MarketsPage() {
       cancelled = true;
     };
   }, [listingsChainId]);
+
+  useEffect(() => {
+    setSearchDraft(qRaw);
+  }, [qRaw]);
+
+  const filteredComingSoon = useMemo(
+    () => (pairs?.comingSoon || []).filter((p) => pairMatchesQuery(p, q)),
+    [pairs, q]
+  );
+  const filteredActive = useMemo(() => (pairs?.active || []).filter((p) => pairMatchesQuery(p, q)), [pairs, q]);
+
+  const filteredListedTokens = useMemo(() => {
+    if (!listedTokens) return null;
+    if (!q) return listedTokens;
+    return listedTokens.filter((t) => listedTokenMatches(t, q));
+  }, [listedTokens, q]);
 
   useEffect(() => {
     if (!isCex) {
@@ -274,43 +436,90 @@ export default function MarketsPage() {
           : "Phase 1: Top 5 active pairs + LDX pairs shown as Coming Soon (DEX Lite)."
       }
     >
+      <MarketsSearchField
+        value={searchDraft}
+        onChange={setSearchDraft}
+        onApply={() => {
+          const t = searchDraft.trim();
+          router.push(t ? `/markets?q=${encodeURIComponent(t)}` : "/markets");
+        }}
+        onClear={() => {
+          setSearchDraft("");
+          router.push("/markets");
+        }}
+        hasFilter={!!qRaw}
+      />
       {!isCex ? (
         <Grid>
           <Span col={12}>
             <Card
               title="Phase 1 markets"
-              right={<Pill>{error ? "Error" : "Live from backend"}</Pill>}
+              right={<Pill>{error ? "Error" : "Lidex pairs"}</Pill>}
               tone={error ? "danger" : "default"}
             >
               <div style={{ display: "grid" }}>
-                <div style={rowHeadGrid}>
-                  <div>Pair</div>
-                  <div>Price</div>
-                  <div>24h</div>
-                  <div>Volume</div>
-                </div>
-                {(pairs?.comingSoon || []).map((p) => (
-                  <Row
-                    key={p.symbol}
-                    title={`${p.symbol} (Coming Soon)`}
-                    baseToken={p.baseToken}
-                    quoteToken={p.quoteToken}
-                    price={fmtPrice(stats?.bySymbol?.[p.symbol]?.price)}
-                    change={fmtChangePct(stats?.bySymbol?.[p.symbol]?.change24hPct)}
-                    volume={fmtVol(stats?.bySymbol?.[p.symbol]?.volume24hQuote)}
-                  />
-                ))}
-                {(pairs?.active || []).map((p) => (
-                  <Row
-                    key={p.symbol}
-                    title={p.symbol}
-                    baseToken={p.baseToken}
-                    quoteToken={p.quoteToken}
-                    price={fmtPrice(stats?.bySymbol?.[p.symbol]?.price)}
-                    change={fmtChangePct(stats?.bySymbol?.[p.symbol]?.change24hPct)}
-                    volume={fmtVol(stats?.bySymbol?.[p.symbol]?.volume24hQuote)}
-                  />
-                ))}
+                {filteredComingSoon.length === 0 && filteredActive.length === 0 && q ? (
+                  <div style={{ padding: "14px 0", fontSize: 13, opacity: 0.75 }}>
+                    No pairs match &ldquo;{qRaw}&rdquo;. Try another symbol or{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchDraft("");
+                        router.push("/markets");
+                      }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#2979ff",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        padding: 0,
+                        font: "inherit"
+                      }}
+                    >
+                      clear the filter
+                    </button>
+                    .
+                  </div>
+                ) : (
+                  <>
+                    <MarketsEnrichErrorBanner err={refEnrichErr} />
+                    <div style={rowHeadGrid}>
+                      <div>Pair</div>
+                      <div>Price (USD · ref.)</div>
+                      <div>24h (ref.)</div>
+                      <div>Vol 24h (ref.)</div>
+                    </div>
+                    {filteredComingSoon.map((p) => {
+                      const row = mergePairStats(p.symbol, stats, refEnrichMap);
+                      return (
+                        <Row
+                          key={p.symbol}
+                          title={`${p.symbol} (Coming Soon)`}
+                          baseToken={p.baseToken}
+                          quoteToken={p.quoteToken}
+                          price={fmtPrice(row.price)}
+                          change={fmtChangePct(row.change24hPct)}
+                          volume={fmtVol(row.volume24hQuote)}
+                        />
+                      );
+                    })}
+                    {filteredActive.map((p) => {
+                      const row = mergePairStats(p.symbol, stats, refEnrichMap);
+                      return (
+                        <Row
+                          key={p.symbol}
+                          title={p.symbol}
+                          baseToken={p.baseToken}
+                          quoteToken={p.quoteToken}
+                          price={fmtPrice(row.price)}
+                          change={fmtChangePct(row.change24hPct)}
+                          volume={fmtVol(row.volume24hQuote)}
+                        />
+                      );
+                    })}
+                  </>
+                )}
                 {error ? (
                   <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>Error: {error}</div>
                 ) : null}
@@ -355,6 +564,8 @@ export default function MarketsPage() {
                   <div style={{ fontSize: 12, opacity: 0.8 }}>Loading…</div>
                 ) : listedTokens.length === 0 ? (
                   <div style={{ fontSize: 12, opacity: 0.8 }}>No approved tokens yet for this chain.</div>
+                ) : filteredListedTokens && filteredListedTokens.length === 0 && q ? (
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>No listed tokens match &ldquo;{qRaw}&rdquo;.</div>
                 ) : (
                   <div style={{ display: "grid" }}>
                     <div style={rowHeadGrid}>
@@ -363,7 +574,7 @@ export default function MarketsPage() {
                       <div>24h</div>
                       <div>Volume</div>
                     </div>
-                    {listedTokens.map((t) => (
+                    {(filteredListedTokens || []).map((t) => (
                       <Row
                         key={`${t.symbol}-${t.address}`}
                         title={`${t.symbol}/LDX (Coming Soon)`}
@@ -401,34 +612,47 @@ export default function MarketsPage() {
                 {active === "list" ? (
                   <Card title="Markets" right={<Pill tone="info">{error ? "Error" : "Pairs"}</Pill>} tone={error ? "danger" : "default"}>
                     <div style={{ display: "grid" }}>
-                      <div style={rowHeadGrid}>
-                        <div>Pair</div>
-                        <div>Price</div>
-                        <div>24h</div>
-                        <div>Volume</div>
-                      </div>
-                      {(pairs?.comingSoon || []).map((p) => (
-                        <Row
-                          key={p.symbol}
-                          title={`${p.symbol} (Coming Soon)`}
-                          baseToken={p.baseToken}
-                          quoteToken={p.quoteToken}
-                          price={fmtPrice(stats?.bySymbol?.[p.symbol]?.price)}
-                          change={fmtChangePct(stats?.bySymbol?.[p.symbol]?.change24hPct)}
-                          volume={fmtVol(stats?.bySymbol?.[p.symbol]?.volume24hQuote)}
-                        />
-                      ))}
-                      {(pairs?.active || []).map((p) => (
-                        <Row
-                          key={p.symbol}
-                          title={p.symbol}
-                          baseToken={p.baseToken}
-                          quoteToken={p.quoteToken}
-                          price={fmtPrice(stats?.bySymbol?.[p.symbol]?.price)}
-                          change={fmtChangePct(stats?.bySymbol?.[p.symbol]?.change24hPct)}
-                          volume={fmtVol(stats?.bySymbol?.[p.symbol]?.volume24hQuote)}
-                        />
-                      ))}
+                      {filteredComingSoon.length === 0 && filteredActive.length === 0 && q ? (
+                        <div style={{ padding: "14px 0", fontSize: 13, opacity: 0.75 }}>No pairs match &ldquo;{qRaw}&rdquo;.</div>
+                      ) : (
+                        <>
+                          <MarketsEnrichErrorBanner err={refEnrichErr} />
+                          <div style={rowHeadGrid}>
+                            <div>Pair</div>
+                            <div>Price (USD · ref.)</div>
+                            <div>24h (ref.)</div>
+                            <div>Vol 24h (ref.)</div>
+                          </div>
+                          {filteredComingSoon.map((p) => {
+                            const row = mergePairStats(p.symbol, stats, refEnrichMap);
+                            return (
+                              <Row
+                                key={p.symbol}
+                                title={`${p.symbol} (Coming Soon)`}
+                                baseToken={p.baseToken}
+                                quoteToken={p.quoteToken}
+                                price={fmtPrice(row.price)}
+                                change={fmtChangePct(row.change24hPct)}
+                                volume={fmtVol(row.volume24hQuote)}
+                              />
+                            );
+                          })}
+                          {filteredActive.map((p) => {
+                            const row = mergePairStats(p.symbol, stats, refEnrichMap);
+                            return (
+                              <Row
+                                key={p.symbol}
+                                title={p.symbol}
+                                baseToken={p.baseToken}
+                                quoteToken={p.quoteToken}
+                                price={fmtPrice(row.price)}
+                                change={fmtChangePct(row.change24hPct)}
+                                volume={fmtVol(row.volume24hQuote)}
+                              />
+                            );
+                          })}
+                        </>
+                      )}
                       {error ? (
                         <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>Error: {error}</div>
                       ) : null}
@@ -469,34 +693,47 @@ export default function MarketsPage() {
             <Span col={8}>
               <Card title="Markets" right={<Pill tone="info">{error ? "Error" : "Pairs"}</Pill>} tone={error ? "danger" : "default"}>
                 <div style={{ display: "grid" }}>
-                  <div style={rowHeadGrid}>
-                    <div>Pair</div>
-                    <div>Price</div>
-                    <div>24h</div>
-                    <div>Volume</div>
-                  </div>
-                  {(pairs?.comingSoon || []).map((p) => (
-                    <Row
-                      key={p.symbol}
-                      title={`${p.symbol} (Coming Soon)`}
-                      baseToken={p.baseToken}
-                      quoteToken={p.quoteToken}
-                      price={fmtPrice(stats?.bySymbol?.[p.symbol]?.price)}
-                      change={fmtChangePct(stats?.bySymbol?.[p.symbol]?.change24hPct)}
-                      volume={fmtVol(stats?.bySymbol?.[p.symbol]?.volume24hQuote)}
-                    />
-                  ))}
-                  {(pairs?.active || []).map((p) => (
-                    <Row
-                      key={p.symbol}
-                      title={p.symbol}
-                      baseToken={p.baseToken}
-                      quoteToken={p.quoteToken}
-                      price={fmtPrice(stats?.bySymbol?.[p.symbol]?.price)}
-                      change={fmtChangePct(stats?.bySymbol?.[p.symbol]?.change24hPct)}
-                      volume={fmtVol(stats?.bySymbol?.[p.symbol]?.volume24hQuote)}
-                    />
-                  ))}
+                  {filteredComingSoon.length === 0 && filteredActive.length === 0 && q ? (
+                    <div style={{ padding: "14px 0", fontSize: 13, opacity: 0.75 }}>No pairs match &ldquo;{qRaw}&rdquo;.</div>
+                  ) : (
+                    <>
+                      <MarketsEnrichErrorBanner err={refEnrichErr} />
+                      <div style={rowHeadGrid}>
+                        <div>Pair</div>
+                        <div>Price (USD · ref.)</div>
+                        <div>24h (ref.)</div>
+                        <div>Vol 24h (ref.)</div>
+                      </div>
+                      {filteredComingSoon.map((p) => {
+                        const row = mergePairStats(p.symbol, stats, refEnrichMap);
+                        return (
+                          <Row
+                            key={p.symbol}
+                            title={`${p.symbol} (Coming Soon)`}
+                            baseToken={p.baseToken}
+                            quoteToken={p.quoteToken}
+                            price={fmtPrice(row.price)}
+                            change={fmtChangePct(row.change24hPct)}
+                            volume={fmtVol(row.volume24hQuote)}
+                          />
+                        );
+                      })}
+                      {filteredActive.map((p) => {
+                        const row = mergePairStats(p.symbol, stats, refEnrichMap);
+                        return (
+                          <Row
+                            key={p.symbol}
+                            title={p.symbol}
+                            baseToken={p.baseToken}
+                            quoteToken={p.quoteToken}
+                            price={fmtPrice(row.price)}
+                            change={fmtChangePct(row.change24hPct)}
+                            volume={fmtVol(row.volume24hQuote)}
+                          />
+                        );
+                      })}
+                    </>
+                  )}
                   {error ? (
                     <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>Error: {error}</div>
                   ) : null}
@@ -531,3 +768,16 @@ export default function MarketsPage() {
   );
 }
 
+export default function MarketsPage() {
+  return (
+    <Suspense
+      fallback={
+        <PageShell title="Markets" subtitle="Loading…">
+          <div style={{ fontSize: 14, opacity: 0.75 }}>Loading markets…</div>
+        </PageShell>
+      }
+    >
+      <MarketsPageContent />
+    </Suspense>
+  );
+}

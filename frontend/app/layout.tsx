@@ -5,8 +5,8 @@ import "./globals.css";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className="dark">
+      <body className="min-h-dvh bg-lidex-bg text-white antialiased">
         <ModeProvider defaultMode="dex">
           <Web3Providers>
             <TopNav />

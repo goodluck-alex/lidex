@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { SegmentTabs } from "./ui";
 
 export type PanelTab<T extends string> = { id: T; label: string };
 
@@ -13,32 +14,7 @@ export function MobileTabs<T extends string>({
   onChange: (next: T) => void;
   tabs: readonly PanelTab<T>[];
 }) {
-  return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-      {tabs.map((t) => {
-        const active = value === t.id;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onChange(t.id)}
-            style={{
-              border: "1px solid rgba(255,255,255,0.14)",
-              background: active ? "rgba(0,200,150,0.18)" : "rgba(255,255,255,0.06)",
-              color: "white",
-              padding: "8px 10px",
-              borderRadius: 999,
-              cursor: "pointer",
-              fontWeight: 700,
-              fontSize: 12
-            }}
-          >
-            {t.label}
-          </button>
-        );
-      })}
-    </div>
-  );
+  return <SegmentTabs value={value} onChange={onChange} tabs={tabs} />;
 }
 
 export function ResponsivePanels<T extends string>({
@@ -66,4 +42,3 @@ export function ResponsivePanels<T extends string>({
     </>
   );
 }
-

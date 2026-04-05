@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
@@ -12,22 +11,15 @@ const initial: LoginState = { error: null };
 function SubmitButton({ requirePassword }: { requirePassword: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <button type="submit" disabled={pending} style={btnStyle}>
+    <button
+      type="submit"
+      disabled={pending}
+      className="mt-3 min-h-11 rounded-xl border border-[#00c896]/40 bg-[#00c896]/18 px-4 text-sm font-semibold text-white transition-opacity hover:bg-[#00c896]/25 disabled:cursor-not-allowed disabled:opacity-60"
+    >
       {pending ? "Signing in…" : requirePassword ? "Sign in" : "Continue"}
     </button>
   );
 }
-
-const btnStyle: CSSProperties = {
-  marginTop: 12,
-  padding: "10px 16px",
-  borderRadius: 10,
-  border: "1px solid rgba(0,200,150,0.35)",
-  background: "rgba(0,200,150,0.18)",
-  color: "white",
-  fontWeight: 650,
-  cursor: "pointer"
-};
 
 export function LoginClient({
   nextPath,
@@ -42,40 +34,27 @@ export function LoginClient({
     <PageShell title="Internal admin" subtitle="Server-gated console; API key never leaves the Next server.">
       <Card title="Sign in">
         {!requirePassword ? (
-          <p style={{ marginTop: 0, opacity: 0.75, fontSize: 13 }}>
-            Development mode: no <code style={{ opacity: 0.9 }}>INTERNAL_ADMIN_UI_PASSWORD</code> set — click Continue.
-            Set a password in production.
+          <p className="mt-0 text-sm text-white/75">
+            Development mode: no <code>INTERNAL_ADMIN_UI_PASSWORD</code> set — click Continue. Set a password in production.
           </p>
         ) : null}
-        {state.error ? (
-          <p style={{ color: "#ff8a8a", marginTop: 0, fontSize: 14 }}>{state.error}</p>
-        ) : null}
+        {state.error ? <p className="mt-0 text-sm text-red-300">{state.error}</p> : null}
         <form action={formAction}>
           <input type="hidden" name="next" value={nextPath} />
-          <label style={{ display: "block", fontSize: 13, marginTop: 8 }}>
+          <label className="mt-2 block text-sm text-white/85">
             Password
             <input
               type="password"
               name="password"
               autoComplete="current-password"
               required={requirePassword}
-              style={{
-                display: "block",
-                width: "100%",
-                maxWidth: 360,
-                marginTop: 6,
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "rgba(0,0,0,0.25)",
-                color: "white"
-              }}
+              className="mt-1.5 block max-w-[360px] w-full rounded-lg border border-white/12 bg-black/25 px-2.5 py-2.5 text-sm text-white focus:border-[#00c896]/45 focus:outline-none focus:ring-1 focus:ring-[#00c896]/35"
             />
           </label>
           <SubmitButton requirePassword={requirePassword} />
         </form>
-        <p style={{ marginTop: 16, fontSize: 13, opacity: 0.65 }}>
-          <Link href="/" style={{ color: "rgba(100,180,255,0.95)" }}>
+        <p className="mt-4 text-sm text-white/60">
+          <Link href="/" className="text-[#7ab8ff] hover:text-[#9ccaff] hover:underline">
             ← Back to app
           </Link>
         </p>

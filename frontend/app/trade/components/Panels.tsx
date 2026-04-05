@@ -125,24 +125,24 @@ export function PairHeader({ symbol = DEFAULT_TRADE_CHART_SYMBOL }: { symbol?: s
   }, []);
 
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ fontWeight: 900, letterSpacing: 0.3 }}>{symbol}</div>
+    <div className="flex flex-wrap items-start justify-between gap-2.5">
+      <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex flex-wrap items-baseline gap-2.5">
+          <div className="font-black tracking-wide text-white">{symbol}</div>
           <Pill tone="info">CEX Full</Pill>
-          <div style={{ fontSize: 12, opacity: 0.72 }}>{meta}</div>
+          <div className="text-xs text-white/70">{meta}</div>
         </div>
         {!matcherReady ? (
-          <div style={{ fontSize: 11, opacity: 0.5 }}>Loading matcher…</div>
+          <div className="text-[11px] text-white/50">Loading matcher…</div>
         ) : matcherLine ? (
-          <div style={{ fontSize: 11, opacity: 0.68, lineHeight: 1.4 }}>
-            <b>Matcher</b> · {matcherLine}
+          <div className="text-[11px] leading-snug text-white/65">
+            <span className="font-semibold text-white/80">Matcher</span> · {matcherLine}
           </div>
         ) : (
-          <div style={{ fontSize: 11, opacity: 0.55 }}>Matcher stats unavailable (use CEX mode / check backend).</div>
+          <div className="text-[11px] text-white/55">Matcher stats unavailable (use CEX mode / check backend).</div>
         )}
       </div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+      <div className="flex items-center gap-2.5">
         <Pill tone="success">Limit</Pill>
         <Pill tone="success">Market</Pill>
         <Pill tone="success">Stop-limit</Pill>
@@ -192,8 +192,8 @@ export function ChartPanel({ symbol = DEFAULT_TRADE_CHART_SYMBOL }: { symbol?: s
 
   return (
     <Card title="Chart" right={<Pill tone="info">Lightweight Charts</Pill>}>
-      <div style={{ display: "grid", gap: 8 }}>
-        <div style={{ fontSize: 12, opacity: 0.75 }}>
+      <div className="grid gap-2">
+        <div className="text-xs text-white/75">
           {err
             ? `Error: ${err}`
             : `${symbol} • 1h • ${candles.length} bars${sourceLabel ? ` • ${sourceLabel}` : ""}`}

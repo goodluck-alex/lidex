@@ -1,63 +1,42 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { logoutInternalAdmin } from "../actions";
 
-const linkStyle: CSSProperties = {
-  color: "rgba(255,255,255,0.88)",
-  textDecoration: "none",
-  padding: "6px 10px",
-  borderRadius: 8,
-  fontSize: 13,
-  background: "rgba(255,255,255,0.06)"
-};
+const navLinkClass =
+  "rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1.5 text-[13px] font-medium text-white/90 no-underline transition-colors hover:border-white/18 hover:bg-white/10";
 
 export default function InternalAdminConsoleLayout({ children }: { children: ReactNode }) {
   return (
-    <div style={{ minHeight: "100vh", background: "#070a12", color: "#e8eaef" }}>
-      <header
-        style={{
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
-          padding: "12px 18px",
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: 10,
-          justifyContent: "space-between"
-        }}
-      >
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          <span style={{ fontWeight: 800, marginRight: 8 }}>Lidex internal admin</span>
-          <Link href="/internal-admin" style={linkStyle}>
+    <div className="min-h-dvh bg-[#070a12] text-[#e8eaef]">
+      <header className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-2.5 border-b border-white/[0.08] bg-[#0b0f1a]/95 px-4 py-3 backdrop-blur-md">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 font-extrabold tracking-tight text-white">Lidex internal admin</span>
+          <Link href="/internal-admin" className={navLinkClass}>
             Home
           </Link>
-          <Link href="/internal-admin/listings" style={linkStyle}>
+          <Link href="/internal-admin/listings" className={navLinkClass}>
             Listings
           </Link>
-          <Link href="/internal-admin/dex-pairs" style={linkStyle}>
+          <Link href="/internal-admin/dex-pairs" className={navLinkClass}>
             DEX pairs
           </Link>
-          <Link href="/internal-admin/launchpad" style={linkStyle}>
+          <Link href="/internal-admin/launchpad" className={navLinkClass}>
             Launchpad
           </Link>
-          <Link href="/internal-admin/liq-mining" style={linkStyle}>
+          <Link href="/internal-admin/liq-mining" className={navLinkClass}>
             Liq mining
           </Link>
-          <Link href="/internal-admin/governance" style={linkStyle}>
+          <Link href="/internal-admin/governance" className={navLinkClass}>
             Governance
           </Link>
-          <Link href="/internal-admin/audit-logs" style={linkStyle}>
+          <Link href="/internal-admin/audit-logs" className={navLinkClass}>
             Audit log
           </Link>
         </div>
         <form action={logoutInternalAdmin}>
           <button
             type="submit"
-            style={{
-              ...linkStyle,
-              border: "1px solid rgba(255,100,100,0.25)",
-              cursor: "pointer",
-              background: "rgba(255,80,80,0.12)"
-            }}
+            className={`${navLinkClass} cursor-pointer border-red-400/25 bg-red-500/10 text-red-100 hover:border-red-400/40 hover:bg-red-500/15`}
           >
             Log out
           </button>
