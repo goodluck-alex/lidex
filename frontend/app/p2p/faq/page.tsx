@@ -1,10 +1,24 @@
 import Link from "next/link";
-import React from "react";
+import React, { type ReactNode } from "react";
 
-const FAQS = [
+const LDX_BSCSCAN = "https://bscscan.com/token/0x567a4f63f6838005e104c053fc24a3510b0432e1";
+
+const FAQS: { q: string; a: ReactNode }[] = [
   {
     q: "What is P2P?",
     a: "Peer-to-peer trading: you exchange fiat with another user for crypto (or the reverse), coordinated on Lidex with ads, orders, timers, and chat."
+  },
+  {
+    q: "What is LDX in P2P?",
+    a: (
+      <>
+        LDX is the Lidex token (BEP-20 on BNB Smart Chain). You can list and match LDX ads like USDT or other supported assets. Verify the contract on{" "}
+        <a href={LDX_BSCSCAN} target="_blank" rel="noopener noreferrer" className="text-[#7aa7ff] underline hover:text-[#9bc0ff]">
+          BscScan
+        </a>
+        .
+      </>
+    )
   },
   {
     q: "How long do I have to pay?",
@@ -34,7 +48,7 @@ export default function P2PFaqPage() {
           {FAQS.map((f) => (
             <div key={f.q} className="border-b border-white/[0.06] pb-4 last:border-0">
               <div className="font-semibold text-white/95">{f.q}</div>
-              <p className="mt-1 text-sm leading-relaxed text-gray-400">{f.a}</p>
+              <div className="mt-1 text-sm leading-relaxed text-gray-400">{f.a}</div>
             </div>
           ))}
         </div>

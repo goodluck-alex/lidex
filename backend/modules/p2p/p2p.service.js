@@ -1,5 +1,24 @@
 const { prisma } = require("../../lib/prisma");
 
+/** Symbols allowed for P2P ads and marketplace filters (must match frontend). */
+const P2P_TOKEN_SYMBOLS = new Set(["USDT", "LDX", "BTC", "ETH"]);
+
+function normalizeP2pToken(sym) {
+  return String(sym || "USDT")
+    .trim()
+    .toUpperCase();
+}
+
+function assertP2pToken(sym, fieldName = "token") {
+  const t = normalizeP2pToken(sym);
+  if (!P2P_TOKEN_SYMBOLS.has(t)) {
+    const e = new Error(`${fieldName} must be one of: ${[...P2P_TOKEN_SYMBOLS].join(", ")}`);
+    e.code = "BAD_REQUEST";
+    throw e;
+  }
+  return t;
+}
+
 function peerLabel(address) {
   if (!address || String(address).length < 10) return address ? String(address).slice(0, 8) : "—";
   const a = String(address).toLowerCase();
@@ -42,7 +61,7 @@ async function maybeExpireOrder(row) {
  */
 async function listAds({ query }) {
   const flow = String(query?.flow || "buy").toLowerCase();
-  const token = String(query?.token || "USDT").toUpperCase();
+  const token = assertP2pToken(query?.token || "USDT", "token");
   const fiat = String(query?.fiat || "UGX").toUpperCase();
   const side = flow === "sell" ? "buy" : "sell";
   const merchantOnly = String(query?.merchant || "") === "1";
@@ -101,7 +120,7 @@ async function listAds({ query }) {
 
 async function expressMatch({ body }) {
   const flow = String(body?.flow || "buy").toLowerCase();
-  const token = String(body?.token || "USDT").toUpperCase();
+  const token = assertP2pToken(body?.token || "USDT", "token");
   const fiat = String(body?.fiat || "UGX").toUpperCase();
   const amountFiat = assertPositiveDecimalString(body?.amountFiat ?? body?.amount, "amountFiat");
   const payment = String(body?.paymentMethod || body?.payment || "").trim();
@@ -132,7 +151,7 @@ async function createAd({ user, body }) {
     e.code = "BAD_REQUEST";
     throw e;
   }
-  const tokenSymbol = String(body?.tokenSymbol || "USDT").toUpperCase();
+  const tokenSymbol = assertP2pToken(body?.tokenSymbol || "USDT", "tokenSymbol");
   const fiatCurrency = String(body?.fiatCurrency || "UGX").toUpperCase();
   const priceType = String(body?.priceType || "fixed").toLowerCase();
   if (priceType !== "fixed" && priceType !== "market") {

@@ -8,7 +8,8 @@ import { apiDelete, apiGet, apiPatch, apiPost } from "../../services/api";
 import { me } from "../../wallet/auth";
 import { P2PNav, type P2PTabId } from "./P2PNav";
 
-const TOKENS = ["USDT", "BTC", "ETH"] as const;
+/** P2P-supported assets; LDX is Lidex on BSC — see shared/tokens/ldx.js */
+const TOKENS = ["USDT", "LDX", "BTC", "ETH"] as const;
 const FIATS = ["UGX", "KES", "NGN", "USD"] as const;
 
 type AdRow = {
