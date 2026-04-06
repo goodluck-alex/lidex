@@ -1163,7 +1163,26 @@ app.get("/v1/p2p/merchant/status", requireLidexMode, requireAuthUser, async (req
 });
 
 async function start() {
-  await prisma.$connect();
+  // Bind all interfaces — required on Render, Railway, Fly, etc. (not only localhost).
+  app.listen(Number(port), "0.0.0.0", () => {
+    logDexEnvSummary();
+    stopCexDepositPoller = cexOnchain.startDepositPollerIfEnabled();
+    // eslint-disable-next-line no-console
+    console.log(`Lidex backend listening on 0.0.0.0:${port}`);
+  });
+
+  const maxAttempts = 8;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await prisma.$connect();
+      break;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(`DB connect failed (attempt ${attempt}/${maxAttempts}):`, e?.message || e);
+      await new Promise((r) => setTimeout(r, Math.min(30000, 1500 * attempt)));
+    }
+  }
+
   try {
     await matcherService.hydrateFromDb();
   } catch (e) {
@@ -1175,13 +1194,6 @@ async function start() {
   } catch {
     /* non-fatal */
   }
-  // Bind all interfaces — required on Render, Railway, Fly, etc. (not only localhost).
-  app.listen(Number(port), "0.0.0.0", () => {
-    logDexEnvSummary();
-    stopCexDepositPoller = cexOnchain.startDepositPollerIfEnabled();
-    // eslint-disable-next-line no-console
-    console.log(`Lidex backend listening on 0.0.0.0:${port}`);
-  });
 }
 
 start().catch((err) => {
