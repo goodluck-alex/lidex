@@ -23,6 +23,10 @@ This repository scaffolds a **hybrid exchange** with two UI modes:
 └── README.md
 ```
 
+## Mobile app (Android APK / AAB)
+
+The `frontend/android/` project is a **native Capacitor shell** (`com.lidex.com`) that loads your **hosted** Next.js app in a WebView. Build signed **APK** and **AAB** on your machine with Android Studio (or Gradle). See **[docs/mobile-android.md](docs/mobile-android.md)** for `server.url`, signing, and Play Store bundle steps.
+
 ## Modes (Lite vs Full)
 
 The UI exposes features based on the active mode:

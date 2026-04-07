@@ -1,0 +1,18 @@
+{
+  "appId": "com.lidex.com",
+  "appName": "Lidex",
+  "webDir": "capacitor-www",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0b0f1a"
+    }
+  }
+}

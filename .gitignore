@@ -46,3 +46,11 @@ coverage/
 # Misc
 *.pem
 .vercel
+
+# Capacitor Android (local builds & signing secrets)
+frontend/android/.gradle/
+frontend/android/**/build/
+frontend/android/local.properties
+frontend/android/keystore.properties
+frontend/android/*.jks
+frontend/android/*.keystore
