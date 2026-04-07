@@ -17,7 +17,7 @@
   },
   "server": {
     "androidScheme": "https",
-    "url": "https://lidex-hybrid.vercel.app",
+    "url": "https://lidex-hybrid.vercel.app/m",
     "cleartext": false
   }
 }

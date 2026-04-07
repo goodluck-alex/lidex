@@ -1,5 +1,5 @@
+import { AppChrome } from "../components/AppChrome";
 import { ModeProvider } from "../context/mode";
-import { TopNav } from "../components/TopNav";
 import { Web3Providers } from "../components/Web3Providers";
 import "./globals.css";
 
@@ -9,8 +9,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-dvh bg-lidex-bg text-white antialiased">
         <ModeProvider defaultMode="dex">
           <Web3Providers>
-            <TopNav />
-            {children}
+            <AppChrome>{children}</AppChrome>
           </Web3Providers>
         </ModeProvider>
       </body>

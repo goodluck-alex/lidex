@@ -23,7 +23,7 @@ Copy the example and merge the `server` block into `frontend/capacitor.config.js
 ```json
 "server": {
   "androidScheme": "https",
-  "url": "https://lidex-hybrid.vercel.app",
+  "url": "https://lidex-hybrid.vercel.app/m",
   "cleartext": false
 }
 ```
