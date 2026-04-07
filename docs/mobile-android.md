@@ -23,12 +23,12 @@ Copy the example and merge the `server` block into `frontend/capacitor.config.js
 ```json
 "server": {
   "androidScheme": "https",
-  "url": "https://YOUR-FRONTEND-HOST",
+  "url": "https://lidex-hybrid.vercel.app",
   "cleartext": false
 }
 ```
 
-Use the **exact origin** users open in the browser (no trailing slash).
+Use the **exact origin** users open in the browser (**no trailing slash**). The repo default in `frontend/capacitor.config.json` is set to the production Vercel app above; change it if you use another domain.
 
 Sync native projects:
 

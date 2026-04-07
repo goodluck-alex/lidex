@@ -14,5 +14,10 @@
       "style": "DARK",
       "backgroundColor": "#0b0f1a"
     }
+  },
+  "server": {
+    "androidScheme": "https",
+    "url": "https://lidex-hybrid.vercel.app",
+    "cleartext": false
   }
 }
