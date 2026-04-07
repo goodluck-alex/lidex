@@ -780,12 +780,12 @@ export function HomeLanding() {
             <p className="mb-3 text-xs font-bold uppercase tracking-wider text-white/40">Support</p>
             <ul className="space-y-2 text-sm text-white/70">
               <li>
-                <Link href="/docs" className="hover:text-[#00c896]">
+                <Link href="/help" className="hover:text-[#00c896]">
                   Help Center
                 </Link>
               </li>
               <li>
-                <Link href="/docs" className="hover:text-[#00c896]">
+                <Link href="/help/contact-support/contact-support" className="hover:text-[#00c896]">
                   Contact
                 </Link>
               </li>
