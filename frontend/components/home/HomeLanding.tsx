@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMode } from "../../context/mode";
+import { SiGoogleplay } from "react-icons/si";
+import { FaApple } from "react-icons/fa";
 import { setRefCode } from "../../wallet/referral";
 import { PINNED_SERVICES, SERVICE_GROUPS } from "../../lib/lidexServicesCatalog";
 import { LIDEX_TELEGRAM_URL, LIDEX_TWITTER_URL } from "../../lib/social";
@@ -40,6 +42,9 @@ function fmtVol(n: number | null | undefined) {
   if (n >= 1e3) return `${(n / 1e3).toFixed(2)}K`;
   return n.toFixed(0);
 }
+
+const ANDROID_APK_URL = "/download/android.apk";
+const IOS_URL = "#";
 
 const compactTileClass =
   "group flex min-h-[4rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-white/[0.08] bg-white/[0.04] px-1 py-1.5 text-center transition hover:border-[#f0b90b]/40 hover:bg-white/[0.07] sm:min-h-[4.25rem] sm:py-2";
@@ -436,54 +441,30 @@ export function HomeLanding() {
             <p className="mt-4 max-w-xl text-base text-white/70 sm:text-lg">
               Lite swaps and full trading in one account — switch anytime.
             </p>
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Link
-                href="https://github.com/goodluck-alex/lidex/releases"
-                className="inline-flex items-center gap-2 rounded-xl bg-[#00c896] px-6 py-3 text-sm font-bold text-[#0b0f1a] shadow-lg shadow-[#00c896]/20 transition hover:bg-[#00e0a8]"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path
-                    d="M8 6.5l-1-1.5M16 6.5l1-1.5"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M7 9.5c0-2.2 2.2-4 5-4s5 1.8 5 4v6.8c0 1.1-.9 2-2 2H9c-1.1 0-2-.9-2-2V9.5z"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M9 18v2.2M15 18v2.2M6 11.2H4.8c-.9 0-1.6.7-1.6 1.6V16c0 .9.7 1.6 1.6 1.6H6M18 11.2h1.2c.9 0 1.6.7 1.6 1.6V16c0 .9-.7 1.6-1.6 1.6H18"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                Android app
-              </Link>
-              <Link
-                href="https://github.com/goodluck-alex/lidex/releases"
-                className="inline-flex items-center gap-2 rounded-xl border border-[#2979ff]/50 bg-[#2979ff]/15 px-6 py-3 text-sm font-bold text-white transition hover:bg-[#2979ff]/25"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path
-                    d="M14.8 6.1c.9-1 1.5-2.3 1.4-3.7-1.3.1-2.7.9-3.6 2-.8.9-1.6 2.3-1.4 3.6 1.4.1 2.7-.7 3.6-1.9z"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M19.8 16.7c-.9 2-2.2 3.9-3.8 3.9-1.1 0-1.4-.7-2.8-.7s-1.8.7-2.8.7c-1.5 0-2.8-1.7-3.9-3.8-1.2-2.3-2-5.2-.8-7.3.9-1.5 2.5-2.4 4.1-2.4 1.3 0 2.4.8 3 .8.6 0 1.9-.9 3.3-.8 1.2 0 2.9.5 3.9 2-3.1 1.7-2.6 6.1.6 7.6z"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                iOS app
-              </Link>
+            <div className="mt-8">
+              <p className="text-center text-xs font-semibold uppercase tracking-wider text-white/45">Download App</p>
+              <div className="mt-3 flex flex-wrap justify-center gap-3">
+                <a
+                  href={ANDROID_APK_URL}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#00c896] px-6 py-3 text-sm font-bold text-[#0b0f1a] shadow-lg shadow-[#00c896]/20 transition hover:bg-[#00e0a8]"
+                  download
+                >
+                  <span aria-hidden>
+                    <SiGoogleplay size={22} />
+                  </span>
+                  Android
+                </a>
+                <a
+                  href={IOS_URL}
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#2979ff]/50 bg-[#2979ff]/15 px-6 py-3 text-sm font-bold text-white transition hover:bg-[#2979ff]/25"
+                  {...(IOS_URL !== "#" ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                >
+                  <span aria-hidden>
+                    <FaApple size={22} />
+                  </span>
+                  iOS
+                </a>
+              </div>
             </div>
           </div>
         </div>

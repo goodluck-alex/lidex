@@ -17,8 +17,8 @@
     "@capacitor/android": "^7.2.0",
     "@capacitor/app": "^7.0.1",
     "@capacitor/core": "^7.2.0",
-    "@capacitor/status-bar": "^7.0.1",
     "@capacitor/splash-screen": "^7.0.1",
+    "@capacitor/status-bar": "^7.0.1",
     "@lidex/shared": "file:../shared",
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@tanstack/react-query": "^5.96.1",
@@ -26,6 +26,7 @@
     "next": "^16.2.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-icons": "^5.6.0",
     "rss-parser": "^3.13.0",
     "viem": "^2.47.6",
     "wagmi": "^2.19.5"
