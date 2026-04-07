@@ -438,7 +438,7 @@ export function HomeLanding() {
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Link
-                href="/download#android"
+                href="https://github.com/goodluck-alex/lidex/releases"
                 className="inline-flex items-center gap-2 rounded-xl bg-[#00c896] px-6 py-3 text-sm font-bold text-[#0b0f1a] shadow-lg shadow-[#00c896]/20 transition hover:bg-[#00e0a8]"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -465,7 +465,7 @@ export function HomeLanding() {
                 Android app
               </Link>
               <Link
-                href="/download#ios"
+                href="https://github.com/goodluck-alex/lidex/releases"
                 className="inline-flex items-center gap-2 rounded-xl border border-[#2979ff]/50 bg-[#2979ff]/15 px-6 py-3 text-sm font-bold text-white transition hover:bg-[#2979ff]/25"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
