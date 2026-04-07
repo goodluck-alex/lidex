@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMode } from "../../context/mode";
 import { setRefCode } from "../../wallet/referral";
+import { PINNED_SERVICES, SERVICE_GROUPS } from "../../lib/lidexServicesCatalog";
 import { LIDEX_TELEGRAM_URL, LIDEX_TWITTER_URL } from "../../lib/social";
 
 /** Normalized row from the homepage markets API (USD quote). */
@@ -39,71 +40,6 @@ function fmtVol(n: number | null | undefined) {
   if (n >= 1e3) return `${(n / 1e3).toFixed(2)}K`;
   return n.toFixed(0);
 }
-
-type ServiceItem = { icon: string; label: string; href: string };
-
-/** First row: compact tiles + “More” expands full catalog (Binance-style). */
-const PINNED_SERVICES: ServiceItem[] = [
-  { icon: "📊", label: "Trade", href: "/cex/trade" },
-  { icon: "⇄", label: "Swap", href: "/dex/swap" },
-  { icon: "👛", label: "Wallet", href: "/wallet" },
-  { icon: "📈", label: "Markets", href: "/markets" },
-  { icon: "🌾", label: "Staking", href: "/staking" },
-  { icon: "🚀", label: "Launchpad", href: "/launchpad" },
-  { icon: "🎁", label: "Referral", href: "/referral" }
-];
-
-const SERVICE_GROUPS: { category: string; items: ServiceItem[] }[] = [
-  {
-    category: "General",
-    items: [
-      { icon: "📰", label: "News", href: "/docs" },
-      { icon: "📈", label: "Markets", href: "/markets" },
-      { icon: "📄", label: "Docs", href: "/docs" }
-    ]
-  },
-  {
-    category: "Trade",
-    items: [
-      { icon: "📊", label: "Trade", href: "/cex/trade" },
-      { icon: "⇄", label: "Swap", href: "/dex/swap" },
-      { icon: "⚡", label: "Margin", href: "/margin" }
-    ]
-  },
-  {
-    category: "Earn",
-    items: [
-      { icon: "🌾", label: "Staking", href: "/staking" },
-      { icon: "🎁", label: "Referral", href: "/referral" },
-      { icon: "🚀", label: "Launchpad", href: "/launchpad" },
-      { icon: "🪙", label: "LDX", href: "/presale" }
-    ]
-  },
-  {
-    category: "Wallet",
-    items: [
-      { icon: "👛", label: "Wallet", href: "/wallet" },
-      { icon: "📥", label: "Deposit", href: "/wallet" },
-      { icon: "📤", label: "Withdraw", href: "/wallet" },
-      { icon: "🔁", label: "Transfer", href: "/wallet" }
-    ]
-  },
-  {
-    category: "Listings",
-    items: [{ icon: "📝", label: "List token", href: "/listings/apply" }]
-  },
-  {
-    category: "Account",
-    items: [{ icon: "⚙️", label: "Settings", href: "/settings" }]
-  },
-  {
-    category: "Platform",
-    items: [
-      { icon: "🏛️", label: "Governance", href: "/governance" },
-      { icon: "🤝", label: "P2P", href: "/p2p" }
-    ]
-  }
-];
 
 const compactTileClass =
   "group flex min-h-[4rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-white/[0.08] bg-white/[0.04] px-1 py-1.5 text-center transition hover:border-[#f0b90b]/40 hover:bg-white/[0.07] sm:min-h-[4.25rem] sm:py-2";
