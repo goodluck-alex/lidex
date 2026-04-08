@@ -38,6 +38,7 @@ const { logDexEnvSummary, logDexPairActivationDbSummary } = require("./lib/dexPa
 const dexPairActivationService = require("./modules/dex/dexPairActivation.service");
 const adminOpsService = require("./modules/adminOps/adminOps.service");
 const blogService = require("./modules/blog/blog.service");
+const ambassadorService = require("./modules/ambassador/ambassador.service");
 const referralLedger = require("./modules/referral/referral.ledger");
 const { sessionMiddleware } = require("./middleware/session");
 const {
@@ -102,6 +103,51 @@ app.get("/v1/blog/posts/:slug", async (req, res) => {
     res.json(result);
   } catch (e) {
     res.status(500).json({ ok: false, error: e?.message || "blog post failed" });
+  }
+});
+
+function requireSessionUser(req, res, next) {
+  if (!req.user?.id) return res.status(401).json({ ok: false, error: "not authenticated" });
+  next();
+}
+
+/** Public: map ambassador username → wallet ref code for ?ref= */
+app.get("/v1/ambassador/resolve/:username", async (req, res) => {
+  try {
+    const result = await ambassadorService.resolveUsername(req.params.username);
+    if (!result.ok) return res.status(404).json(result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "ambassador resolve failed" });
+  }
+});
+
+app.get("/v1/ambassador/leaderboard", referralLimiter, requireLidexMode, async (req, res) => {
+  try {
+    const result = await ambassadorService.leaderboard({ month: req.query?.month });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "ambassador leaderboard failed" });
+  }
+});
+
+app.post("/v1/ambassador/apply", referralLimiter, requireLidexMode, requireSessionUser, async (req, res) => {
+  try {
+    const result = await ambassadorService.apply({ user: req.user, body: req.body || {} });
+    if (!result.ok) return res.status(400).json(result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "ambassador apply failed" });
+  }
+});
+
+app.get("/v1/ambassador/me", referralLimiter, requireLidexMode, requireSessionUser, async (req, res) => {
+  try {
+    const result = await ambassadorService.me({ user: req.user });
+    if (!result.ok) return res.status(400).json(result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "ambassador me failed" });
   }
 });
 
@@ -200,6 +246,7 @@ registerAdminRoutes(app, {
   liqMiningService,
   govSignalService,
   blogService,
+  ambassadorService,
 });
 
 // Phase 2 — LDX launch (config + on-chain buy params for the web UI; txs are signed in the browser)

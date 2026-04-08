@@ -25,6 +25,16 @@ const { validateNewLimitOrder, validateMarketSellQuantity, validateExecutedNotio
 const cexLiquidity = require("./cex.liquidity");
 const stakingService = require("../staking/staking.service");
 
+function notifyAmbassadorTradesForOrder(orderId) {
+  if (!orderId) return;
+  try {
+    const amb = require("../ambassador/ambassador.service");
+    void amb.notifyTradeUsersForOrder(orderId);
+  } catch {
+    /* optional */
+  }
+}
+
 /** @type {import('./matcher.engine').Resting[]} */
 let _bids = [];
 /** @type {import('./matcher.engine').Resting[]} */
@@ -373,6 +383,7 @@ function placeLimitOrder(p) {
 
     await flushTriggeredStopOrders();
 
+    notifyAmbassadorTradesForOrder(out.finalized?.id);
     return { ok: true, order: out.finalized };
   });
 }
@@ -468,6 +479,7 @@ function placeMarketSell(p) {
 
     await flushTriggeredStopOrders();
 
+    notifyAmbassadorTradesForOrder(out.finalized?.id);
     return { ok: true, order: out.finalized };
   });
 }
@@ -562,6 +574,7 @@ function placeMarketBuy(p) {
 
     await flushTriggeredStopOrders();
 
+    notifyAmbassadorTradesForOrder(out.finalized?.id);
     return { ok: true, order: out.finalized };
   });
 }

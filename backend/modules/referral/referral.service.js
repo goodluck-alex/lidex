@@ -2,6 +2,7 @@ const referralModel = require("./referral.model");
 const referralLedger = require("./referral.ledger");
 const referralGraph = require("./referral.graph");
 const { getUserByAddress, setReferralParentIfUnset } = require("../users/users.model");
+const ambassadorService = require("../ambassador/ambassador.service");
 
 async function link({ user }) {
   return {
@@ -73,6 +74,7 @@ async function attach({ user, refCode }) {
   }
 
   await setReferralParentIfUnset(childAddr, parentAddress);
+  void ambassadorService.onReferralAttached(parentAddress, childAddr);
   return { ok: true, attached: true, referralParent: parentAddress };
 }
 

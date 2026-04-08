@@ -32,7 +32,7 @@ export function MobileQuickAccessGrid() {
       {!expanded ? (
         <div className="grid grid-cols-4 gap-2">
           {pinned.map((f) => (
-            <Link key={f.href + f.label} href={f.href} className={tile}>
+            <Link key={f.href + f.label} href={f.href} className={tile} title={f.title}>
               <span className="text-lg leading-none" aria-hidden>
                 {f.icon}
               </span>
@@ -58,7 +58,7 @@ export function MobileQuickAccessGrid() {
               <h3 className="mb-2 text-[10px] font-bold uppercase tracking-wider text-white/45">{g.category}</h3>
               <div className="grid grid-cols-4 gap-2">
                 {g.items.map((f) => (
-                  <Link key={`${g.category}-${f.href}-${f.label}`} href={f.href} className={tile}>
+                  <Link key={`${g.category}-${f.href}-${f.label}`} href={f.href} className={tile} title={f.title}>
                     <span className="text-lg leading-none" aria-hidden>
                       {f.icon}
                     </span>

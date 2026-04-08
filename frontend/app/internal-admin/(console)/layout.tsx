@@ -35,6 +35,9 @@ export default function InternalAdminConsoleLayout({ children }: { children: Rea
           <Link href="/internal-admin/blog" className={navLinkClass}>
             Blog
           </Link>
+          <Link href="/internal-admin/ambassador" className={navLinkClass}>
+            Ambassadors
+          </Link>
         </div>
         <form action={logoutInternalAdmin}>
           <button

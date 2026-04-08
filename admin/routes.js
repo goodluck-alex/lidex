@@ -18,6 +18,7 @@ function registerAdminRoutes(app, deps) {
     liqMiningService,
     govSignalService,
     blogService,
+    ambassadorService,
   } = deps;
 
   app.use(createAdminMutationAuditMiddleware({ prisma }));
@@ -385,6 +386,67 @@ function registerAdminRoutes(app, deps) {
         res.json(result);
       } catch (e) {
         res.status(500).json({ ok: false, error: e?.message || "admin blog delete failed" });
+      }
+    });
+  }
+
+  if (ambassadorService) {
+    app.get("/v1/admin/ambassador/applications", requireAdminApiKey, async (req, res) => {
+      try {
+        const result = await ambassadorService.adminListApplications();
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e?.message || "admin ambassador applications failed" });
+      }
+    });
+
+    app.patch("/v1/admin/ambassador/applications/:id", requireAdminApiKey, async (req, res) => {
+      try {
+        const result = await ambassadorService.adminReviewApplication(req.params.id, req.body || {});
+        if (!result.ok) return res.status(400).json(result);
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e?.message || "admin ambassador review failed" });
+      }
+    });
+
+    app.get("/v1/admin/ambassador/profiles", requireAdminApiKey, async (req, res) => {
+      try {
+        const result = await ambassadorService.adminListProfiles();
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e?.message || "admin ambassador profiles failed" });
+      }
+    });
+
+    app.patch("/v1/admin/ambassador/profiles/:userId", requireAdminApiKey, async (req, res) => {
+      try {
+        const result = await ambassadorService.adminPatchProfile(req.params.userId, req.body || {});
+        if (!result.ok) return res.status(404).json(result);
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e?.message || "admin ambassador profile patch failed" });
+      }
+    });
+
+    app.post("/v1/admin/ambassador/rewards", requireAdminApiKey, async (req, res) => {
+      try {
+        const uid = String(req.body?.userId || "").trim();
+        if (!uid) return res.status(400).json({ ok: false, error: "userId required" });
+        const result = await ambassadorService.adminGrantReward(uid, req.body || {});
+        if (!result.ok) return res.status(400).json(result);
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e?.message || "admin ambassador reward failed" });
+      }
+    });
+
+    app.get("/v1/admin/ambassador/leaderboard", requireAdminApiKey, async (req, res) => {
+      try {
+        const result = await ambassadorService.leaderboard({ month: req.query?.month });
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e?.message || "admin ambassador leaderboard failed" });
       }
     });
   }

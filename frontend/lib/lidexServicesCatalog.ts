@@ -1,6 +1,6 @@
 /** Shared quick-access catalog: homepage + /m mobile app (keep in sync). */
 
-export type ServiceItem = { icon: string; label: string; href: string };
+export type ServiceItem = { icon: string; label: string; href: string; title?: string };
 
 /** First row on web homepage (compact tiles + “More”). */
 export const PINNED_SERVICES: ServiceItem[] = [
@@ -10,6 +10,12 @@ export const PINNED_SERVICES: ServiceItem[] = [
   { icon: "📈", label: "Markets", href: "/markets" },
   { icon: "🌾", label: "Staking", href: "/staking" },
   { icon: "🚀", label: "Launchpad", href: "/launchpad" },
+  {
+    icon: "🏆",
+    label: "Ambassador",
+    href: "/ambassador",
+    title: "Join Lidex Ambassador Program — Earn Rewards & Build Community"
+  },
   { icon: "🎁", label: "Referral", href: "/referral" }
 ];
 
@@ -37,6 +43,12 @@ export const SERVICE_GROUPS: { category: string; items: ServiceItem[] }[] = [
       { icon: "🌾", label: "Staking", href: "/staking" },
       { icon: "🎁", label: "Referral", href: "/referral" },
       { icon: "🚀", label: "Launchpad", href: "/launchpad" },
+      {
+        icon: "🏆",
+        label: "Ambassador",
+        href: "/ambassador",
+        title: "Join Lidex Ambassador Program — Earn Rewards & Build Community"
+      },
       { icon: "🪙", label: "LDX", href: "/presale" }
     ]
   },

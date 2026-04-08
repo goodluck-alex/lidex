@@ -216,3 +216,40 @@ export async function patchGovSignal(formData: FormData) {
   });
   revalidatePath("/internal-admin/governance");
 }
+
+export async function reviewAmbassadorApplication(formData: FormData) {
+  const id = String(formData.get("id") || "").trim();
+  const decision = String(formData.get("decision") || "").trim().toLowerCase();
+  const noteRaw = formData.get("note");
+  const note = noteRaw == null || noteRaw === "" ? null : String(noteRaw).trim().slice(0, 2000);
+  await adminApi(`/v1/admin/ambassador/applications/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ decision, note })
+  });
+  revalidatePath("/internal-admin/ambassador");
+}
+
+export async function patchAmbassadorProfile(formData: FormData) {
+  const userId = String(formData.get("userId") || "").trim();
+  const status = String(formData.get("status") || "").trim().toLowerCase();
+  await adminApi(`/v1/admin/ambassador/profiles/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status })
+  });
+  revalidatePath("/internal-admin/ambassador");
+}
+
+export async function grantAmbassadorReward(formData: FormData) {
+  const userId = String(formData.get("userId") || "").trim();
+  const amountLdx = String(formData.get("amountLdx") || "").trim();
+  const kind = String(formData.get("kind") || "manual").trim().slice(0, 64);
+  const noteRaw = formData.get("note");
+  const note = noteRaw == null || noteRaw === "" ? null : String(noteRaw).trim().slice(0, 2000);
+  const monthRaw = formData.get("monthKey");
+  const monthKey = monthRaw == null || String(monthRaw).trim() === "" ? null : String(monthRaw).trim().slice(0, 7);
+  await adminApi("/v1/admin/ambassador/rewards", {
+    method: "POST",
+    body: JSON.stringify({ userId, amountLdx, kind, note, monthKey })
+  });
+  revalidatePath("/internal-admin/ambassador");
+}

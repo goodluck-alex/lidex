@@ -496,7 +496,7 @@ export function HomeLanding() {
         {!servicesExpanded ? (
           <div className="grid grid-cols-4 gap-2 sm:grid-cols-4 md:grid-cols-8 lg:grid-cols-8">
             {PINNED_SERVICES.map((f) => (
-              <Link key={f.href + f.label} href={f.href} className={compactTileClass}>
+              <Link key={f.href + f.label} href={f.href} className={compactTileClass} title={f.title}>
                 <span className={compactIconClass} aria-hidden>
                   {f.icon}
                 </span>
@@ -522,7 +522,12 @@ export function HomeLanding() {
                 <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-white/45">{g.category}</h3>
                 <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8">
                   {g.items.map((f) => (
-                    <Link key={`${g.category}-${f.href}-${f.label}`} href={f.href} className={compactTileClass}>
+                    <Link
+                      key={`${g.category}-${f.href}-${f.label}`}
+                      href={f.href}
+                      className={compactTileClass}
+                      title={f.title}
+                    >
                       <span className={compactIconClass} aria-hidden>
                         {f.icon}
                       </span>

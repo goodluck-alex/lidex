@@ -33,8 +33,91 @@ model User {
   p2pOrdersAsBuyer      P2pOrder[]              @relation("P2pOrderBuyer")
   p2pOrdersAsSeller     P2pOrder[]              @relation("P2pOrderSeller")
   p2pChatMessages       P2pChatMessage[]
+  ambassadorApplication AmbassadorApplication?
+  ambassadorProfile     AmbassadorProfile?
 
   @@map("users")
+}
+
+/// Phase 2 — Lidex Ambassador Program (application + profile).
+model AmbassadorApplication {
+  id                String   @id @default(cuid())
+  userId            String   @unique @map("user_id")
+  fullName          String   @map("full_name")
+  username          String
+  telegram          String
+  twitter           String
+  country           String
+  promoExperience   String   @map("promo_experience") @db.Text
+  promotePlan       String   @map("promote_plan") @db.Text
+  youtube           String?
+  discord           String?
+  website           String?
+  status            String   @default("pending")
+  reviewNote        String?  @map("review_note") @db.Text
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("ambassador_applications")
+}
+
+model AmbassadorProfile {
+  id             String   @id @default(cuid())
+  userId         String   @unique @map("user_id")
+  publicUsername String   @unique @map("public_username")
+  /// approved | elite | banned
+  status         String   @default("approved")
+  signups        Int      @default(0)
+  activeUsers    Int      @default(0) @map("active_users")
+  traders        Int      @default(0)
+  deposits       Int      @default(0)
+  totalPoints    Int      @default(0) @map("total_points")
+  ldxRewarded    String   @default("0") @map("ldx_rewarded")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pointEvents   AmbassadorPointEvent[]
+  rewardEntries AmbassadorReward[]
+
+  @@index([status, totalPoints])
+  @@map("ambassador_profiles")
+}
+
+/// Idempotent quality points per referred user milestone (drives rank + monthly leaderboard).
+model AmbassadorPointEvent {
+  id               String   @id @default(cuid())
+  ambassadorUserId String   @map("ambassador_user_id")
+  childUserId      String   @map("child_user_id")
+  /// signup | active | trader | deposit
+  kind             String
+  points           Int
+  monthKey         String   @map("month_key")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  profile AmbassadorProfile @relation(fields: [ambassadorUserId], references: [userId], onDelete: Cascade)
+
+  @@unique([ambassadorUserId, childUserId, kind])
+  @@index([monthKey, ambassadorUserId])
+  @@map("ambassador_point_events")
+}
+
+model AmbassadorReward {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  kind      String
+  amountLdx String   @map("amount_ldx")
+  monthKey  String?  @map("month_key")
+  note      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  profile AmbassadorProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("ambassador_rewards")
 }
 
 /// Fiat payment profile for P2P (MTN, bank, etc.).

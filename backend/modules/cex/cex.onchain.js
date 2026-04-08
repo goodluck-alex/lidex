@@ -446,6 +446,12 @@ async function confirmDeposit(userId, txHash) {
         },
       });
     });
+    try {
+      const amb = require("../ambassador/ambassador.service");
+      void amb.onUserDeposit(userId);
+    } catch {
+      /* optional */
+    }
     credited.push(`${c.asset} ${x.toString()}`);
   }
 
