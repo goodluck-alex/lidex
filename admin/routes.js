@@ -17,6 +17,7 @@ function registerAdminRoutes(app, deps) {
     launchpadService,
     liqMiningService,
     govSignalService,
+    blogService,
   } = deps;
 
   app.use(createAdminMutationAuditMiddleware({ prisma }));
@@ -312,6 +313,81 @@ function registerAdminRoutes(app, deps) {
       res.status(500).json({ ok: false, error: e?.message || "admin governance signal patch failed" });
     }
   });
+
+  if (blogService) {
+    app.get("/v1/admin/blog/categories", requireAdminApiKey, async (req, res) => {
+      try {
+        const result = await blogService.listCategoriesPublic();
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e?.message || "admin blog categories failed" });
+      }
+    });
+
+    app.get("/v1/admin/blog/posts", requireAdminApiKey, async (req, res) => {
+      try {
+        const result = await blogService.listPostsAdmin(req.query || {});
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e?.message || "admin blog list failed" });
+      }
+    });
+
+    app.get("/v1/admin/blog/posts/:id", requireAdminApiKey, async (req, res) => {
+      try {
+        const result = await blogService.getPostAdmin(req.params.id);
+        if (!result.ok) {
+          const st = result.code === "NOT_FOUND" ? 404 : 400;
+          return res.status(st).json(result);
+        }
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e?.message || "admin blog get failed" });
+      }
+    });
+
+    app.post("/v1/admin/blog/posts", requireAdminApiKey, async (req, res) => {
+      try {
+        const result = await blogService.createPostAdmin(req.body || {});
+        if (!result.ok) {
+          let st = 400;
+          if (result.code === "CONFLICT") st = 409;
+          return res.status(st).json(result);
+        }
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e?.message || "admin blog create failed" });
+      }
+    });
+
+    app.patch("/v1/admin/blog/posts/:id", requireAdminApiKey, async (req, res) => {
+      try {
+        const result = await blogService.updatePostAdmin(req.params.id, req.body || {});
+        if (!result.ok) {
+          let st = 400;
+          if (result.code === "NOT_FOUND") st = 404;
+          if (result.code === "CONFLICT") st = 409;
+          return res.status(st).json(result);
+        }
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e?.message || "admin blog patch failed" });
+      }
+    });
+
+    app.delete("/v1/admin/blog/posts/:id", requireAdminApiKey, async (req, res) => {
+      try {
+        const result = await blogService.deletePostAdmin(req.params.id);
+        if (!result.ok) {
+          const st = result.code === "NOT_FOUND" ? 404 : 400;
+          return res.status(st).json(result);
+        }
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: e?.message || "admin blog delete failed" });
+      }
+    });
+  }
 }
 
 module.exports = { registerAdminRoutes };

@@ -34,6 +34,7 @@ export function MobilePromoCarousel({ slides }: { slides: PromoSlide[] }) {
   if (n === 0) return null;
 
   const slide = slides[i];
+  const external = /^https?:\/\//i.test(slide.href);
 
   return (
     <section
@@ -71,9 +72,20 @@ export function MobilePromoCarousel({ slides }: { slides: PromoSlide[] }) {
         </span>
         <h3 className="mt-2 text-base font-bold leading-snug text-white">{slide.title}</h3>
         <p className="mt-1 text-sm leading-relaxed text-white/65">{slide.desc}</p>
-        <Link href={slide.href} className="mt-3 inline-block text-sm font-semibold text-[#7aa7ff]">
-          Learn more →
-        </Link>
+        {external ? (
+          <a
+            href={slide.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-block text-sm font-semibold text-[#7aa7ff]"
+          >
+            Learn more →
+          </a>
+        ) : (
+          <Link href={slide.href} className="mt-3 inline-block text-sm font-semibold text-[#7aa7ff]">
+            Learn more →
+          </Link>
+        )}
         <div className="mt-4 flex justify-center gap-1.5" role="tablist" aria-label="Promotions">
           {slides.map((_, idx) => (
             <button

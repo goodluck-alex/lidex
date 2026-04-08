@@ -9,6 +9,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
+    "seed:blog": "node scripts/seed-blog.js",
     "db:ping": "node scripts/ping-db.js",
     "ldx:quote-smoke": "node scripts/ox-ldx-quote-smoke.js",
     "postinstall": "prisma generate"

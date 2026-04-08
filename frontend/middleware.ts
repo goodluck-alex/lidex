@@ -13,6 +13,14 @@ function isCexOnlyPath(pathname: string) {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  /** Spec alias: `/admin/*` → `/internal-admin/*` (same cookie-gated console). */
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    const url = req.nextUrl.clone();
+    const rest = pathname.slice("/admin".length);
+    url.pathname = `/internal-admin${rest}`;
+    return NextResponse.redirect(url);
+  }
+
   if (pathname.startsWith("/internal-admin")) {
     const isLogin =
       pathname === "/internal-admin/login" || pathname.startsWith("/internal-admin/login/");
@@ -64,6 +72,7 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
+    "/admin/:path*",
     "/internal-admin/:path*",
     "/dex/:path*",
     "/swap/:path*",

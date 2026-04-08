@@ -6,8 +6,17 @@ import { MobileMarketTabsList } from "./MobileMarketTabsList";
 import { MobilePromoCarousel, type PromoSlide } from "./MobilePromoCarousel";
 import { MobileQuickAccessGrid } from "./MobileQuickAccessGrid";
 import { MobileStickyHeader } from "./MobileStickyHeader";
+import { ANDROID_APK_URL } from "../../lib/siteUrls";
 
 const PROMO_SLIDES: PromoSlide[] = [
+  {
+    id: "android-apk",
+    tag: "Release",
+    title: "Android app now available",
+    desc: "Download the latest Lidex Android APK and install it on your phone.",
+    href: ANDROID_APK_URL,
+    accent: "green"
+  },
   {
     id: "1",
     tag: "Launchpad",

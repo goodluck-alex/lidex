@@ -9,6 +9,7 @@ import { FaApple } from "react-icons/fa";
 import { setRefCode } from "../../wallet/referral";
 import { PINNED_SERVICES, SERVICE_GROUPS } from "../../lib/lidexServicesCatalog";
 import { LIDEX_TELEGRAM_URL, LIDEX_TWITTER_URL } from "../../lib/social";
+import { ANDROID_APK_URL } from "../../lib/siteUrls";
 
 /** Normalized row from the homepage markets API (USD quote). */
 export type MarketOverviewRow = {
@@ -43,7 +44,6 @@ function fmtVol(n: number | null | undefined) {
   return n.toFixed(0);
 }
 
-const ANDROID_APK_URL = "/download/android.apk";
 const IOS_URL = "#";
 
 const compactTileClass =
@@ -196,6 +196,12 @@ function SlideCarousel({
 
 /** Hero strip: rotating announcements (fade in / out, one at a time) */
 const ANNOUNCEMENT_SLIDES: { tag: string; title: string; desc: string; href: string }[] = [
+  {
+    tag: "Release",
+    title: "Android app now available",
+    desc: "Download the latest Lidex Android app (APK) and install it on your device.",
+    href: ANDROID_APK_URL
+  },
   {
     tag: "Platform",
     title: "Lite and full trading in one place",
@@ -770,7 +776,7 @@ export function HomeLanding() {
                 <span className="cursor-not-allowed opacity-50">Careers</span>
               </li>
               <li>
-                <Link href="/docs" className="hover:text-[#00c896]">
+                <Link href="/blog" className="hover:text-[#00c896]">
                   Blog
                 </Link>
               </li>

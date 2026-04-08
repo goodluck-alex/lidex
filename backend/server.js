@@ -37,6 +37,7 @@ const { prisma, disconnect } = require("./lib/prisma");
 const { logDexEnvSummary, logDexPairActivationDbSummary } = require("./lib/dexPairsFromEnv");
 const dexPairActivationService = require("./modules/dex/dexPairActivation.service");
 const adminOpsService = require("./modules/adminOps/adminOps.service");
+const blogService = require("./modules/blog/blog.service");
 const referralLedger = require("./modules/referral/referral.ledger");
 const { sessionMiddleware } = require("./middleware/session");
 const {
@@ -73,6 +74,35 @@ app.use("/v1", lidexModeMiddleware);
 
 app.get("/health", (req, res) => {
   res.json({ ok: true, service: "lidex-backend", ts: Date.now() });
+});
+
+// Public blog (no Lidex mode required)
+app.get("/v1/blog/categories", async (req, res) => {
+  try {
+    const result = await blogService.listCategoriesPublic();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "blog categories failed" });
+  }
+});
+
+app.get("/v1/blog/posts", async (req, res) => {
+  try {
+    const result = await blogService.listPostsPublic(req.query || {});
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "blog posts list failed" });
+  }
+});
+
+app.get("/v1/blog/posts/:slug", async (req, res) => {
+  try {
+    const result = await blogService.getPostBySlugWithRelatedPublic(req.params.slug);
+    if (!result.ok) return res.status(404).json(result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "blog post failed" });
+  }
 });
 
 // Phase 1 foundation — Auth (wallet-signature login)
@@ -169,6 +199,7 @@ registerAdminRoutes(app, {
   launchpadService,
   liqMiningService,
   govSignalService,
+  blogService,
 });
 
 // Phase 2 — LDX launch (config + on-chain buy params for the web UI; txs are signed in the browser)
