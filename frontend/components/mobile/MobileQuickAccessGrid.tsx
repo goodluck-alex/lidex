@@ -36,7 +36,9 @@ export function MobileQuickAccessGrid() {
               <span className="text-lg leading-none" aria-hidden>
                 {f.icon}
               </span>
-              <span className="max-w-[4.5rem] text-[10px] font-semibold leading-tight text-white/90">{f.label}</span>
+              <span className="max-w-[4.5rem] break-words text-[10px] font-semibold leading-tight text-white/90">
+              {f.label}
+            </span>
             </Link>
           ))}
           <button
@@ -62,7 +64,9 @@ export function MobileQuickAccessGrid() {
                     <span className="text-lg leading-none" aria-hidden>
                       {f.icon}
                     </span>
-                    <span className="max-w-[4.5rem] text-[10px] font-semibold leading-tight text-white/90">{f.label}</span>
+                    <span className="max-w-[4.5rem] break-words text-[10px] font-semibold leading-tight text-white/90">
+              {f.label}
+            </span>
                   </Link>
                 ))}
               </div>

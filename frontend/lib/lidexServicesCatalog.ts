@@ -7,16 +7,17 @@ export const PINNED_SERVICES: ServiceItem[] = [
   { icon: "📊", label: "Trade", href: "/cex/trade" },
   { icon: "⇄", label: "Swap", href: "/dex/swap" },
   { icon: "👛", label: "Wallet", href: "/wallet" },
-  { icon: "📈", label: "Markets", href: "/markets" },
-  { icon: "🌾", label: "Staking", href: "/staking" },
-  { icon: "🚀", label: "Launchpad", href: "/launchpad" },
+  { icon: "🤝", label: "P2P", href: "/p2p" },
   {
     icon: "🏆",
     label: "Ambassador",
     href: "/ambassador",
     title: "Join Lidex Ambassador Program — Earn Rewards & Build Community"
   },
-  { icon: "🎁", label: "Referral", href: "/referral" }
+  { icon: "🎁", label: "Referral", href: "/referral" },
+  { icon: "🚀", label: "Launchpad", href: "/launchpad" },
+  { icon: "🌾", label: "Staking", href: "/staking" },
+  { icon: "📈", label: "Markets", href: "/markets" }
 ];
 
 /** Full catalog when user taps “More” (same on web and mobile). */

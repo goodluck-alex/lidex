@@ -49,7 +49,8 @@ const IOS_URL = "#";
 const compactTileClass =
   "group flex min-h-[4rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-white/[0.08] bg-white/[0.04] px-1 py-1.5 text-center transition hover:border-[#f0b90b]/40 hover:bg-white/[0.07] sm:min-h-[4.25rem] sm:py-2";
 const compactIconClass = "text-base leading-none sm:text-lg";
-const compactLabelClass = "max-w-[4.5rem] text-[10px] font-semibold leading-tight text-white sm:max-w-none sm:text-xs";
+const compactLabelClass =
+  "max-w-[4.5rem] break-words text-[10px] font-semibold leading-tight text-white sm:max-w-none sm:text-xs";
 
 /** Shown when the live news feed is unavailable. */
 const FALLBACK_NEWS: { tag: string; title: string; desc: string; href: string }[] = [
