@@ -435,7 +435,7 @@ function MarketsPageContent() {
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <Link href="/markets/global" className="text-sm font-semibold text-[#7aa7ff] underline">
-          View global markets (CoinGecko) →
+          View global markets →
         </Link>
       </div>
       <MarketsSearchField

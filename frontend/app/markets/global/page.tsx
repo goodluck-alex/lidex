@@ -71,7 +71,7 @@ export default function GlobalMarketsPage() {
   return (
     <PageShell
       title="Global markets"
-      subtitle="Reference prices from CoinGecko (not Lidex order-book prices). For Lidex tradable pairs, use /markets."
+      subtitle="Reference prices (not Lidex order-book prices). For Lidex tradable pairs, use /markets."
     >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <Link href="/markets" className="text-sm font-semibold text-[#7aa7ff] underline">
@@ -85,7 +85,7 @@ export default function GlobalMarketsPage() {
         />
       </div>
 
-      <Card title="Top coins (USD)" right={<Pill>{err ? "Error" : "CoinGecko"}</Pill>} tone={err ? "danger" : "default"}>
+      <Card title="Top coins (USD)" right={<Pill>{err ? "Error" : "External"}</Pill>} tone={err ? "danger" : "default"}>
         {err ? <div className="text-sm text-red-200/90">{err}</div> : null}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
