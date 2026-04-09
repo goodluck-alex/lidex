@@ -433,6 +433,11 @@ function MarketsPageContent() {
       title="Markets"
       subtitle={isCex ? "Browse pairs, charts, and filters." : "Browse listed pairs and token applications."}
     >
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <Link href="/markets/global" className="text-sm font-semibold text-[#7aa7ff] underline">
+          View global markets (CoinGecko) →
+        </Link>
+      </div>
       <MarketsSearchField
         value={searchDraft}
         onChange={setSearchDraft}
