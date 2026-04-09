@@ -22,7 +22,9 @@ function resolveLidexMode(req) {
   const c = req.cookies?.[MODE_COOKIE];
   const fromCookie = normalizeMode(typeof c === "string" ? c : "");
   if (fromCookie) return fromCookie;
-  return null;
+  // Default to DEX when no explicit mode is provided. This keeps read-only routes usable
+  // and makes CEX-only routes fail with 403 (requireCexMode) instead of 400.
+  return "dex";
 }
 
 function lidexModeMiddleware(req, res, next) {
