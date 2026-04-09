@@ -41,8 +41,15 @@ function mergePhase1WithPromoteSet(promoteSet) {
   }
 
   for (const sym of pending) {
-    // eslint-disable-next-line no-console
-    console.warn(`[lidex] ${ENV_ACTIVE}: no coming_soon pair "${sym}" — ignored`);
+    // Allow ops to activate a pair not pre-declared in `@lidex/shared` (0x routing still depends on liquidity).
+    // Format: BASE/QUOTE (e.g. BNB/USDT)
+    const parts = sym.split("/").map((s) => s.trim()).filter(Boolean);
+    if (parts.length === 2) {
+      active.push({ symbol: `${parts[0]}/${parts[1]}`, base: parts[0], quote: parts[1], status: "active" });
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn(`[lidex] ${ENV_ACTIVE}: invalid pair symbol "${sym}" — ignored`);
+    }
   }
 
   return { active, comingSoon: nextComing };
