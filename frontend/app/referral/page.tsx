@@ -30,11 +30,118 @@ type LedgerEntry = {
   createdAt: number;
 };
 
+type PendingReferralRow = {
+  id: string;
+  referredAddress: string;
+  pendingRewardLdx: string;
+  status: string;
+  createdAt: number;
+};
+
+type LdxRewardRow = {
+  id: string;
+  source: string;
+  ldxAmount: string;
+  status: string;
+  referralId: string | null;
+  unlockAt: number | null;
+  createdAt: number;
+};
+
 type ReferralLinkResponse = { ok: true; link: string; code?: string | null };
-type ReferralStatsResponse = { ok: true; stats: ReferralStats; ledger?: LedgerEntry[]; user?: any | null };
+type ReferralStatsResponse = {
+  ok: true;
+  stats: ReferralStats;
+  ledger?: LedgerEntry[];
+  user?: any | null;
+  pendingReferrals?: PendingReferralRow[];
+  ldxRewards?: LdxRewardRow[];
+};
 
 function formatPct(x: number) {
   return `${Math.round(x * 100)}%`;
+}
+
+function ProgramRewardsSection({
+  pendingReferrals,
+  ldxRewards
+}: {
+  pendingReferrals: PendingReferralRow[];
+  ldxRewards: LdxRewardRow[];
+}) {
+  return (
+    <Span col={12}>
+      <Card title="Program rewards" right={<Pill tone="info">{pendingReferrals.length + ldxRewards.length}</Pill>}>
+        <div style={{ display: "grid", gap: 16 }}>
+          <div>
+            <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13 }}>Pending referral verification</div>
+            {pendingReferrals.length === 0 ? (
+              <div style={{ fontSize: 13, opacity: 0.8 }}>No invites are waiting on delay or activity checks.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 8 }}>
+                {pendingReferrals.map((p) => (
+                  <div
+                    key={p.id}
+                    style={{
+                      padding: 10,
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,255,255,0.10)",
+                      fontSize: 12,
+                      opacity: 0.9,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      flexWrap: "wrap",
+                      gap: 8
+                    }}
+                  >
+                    <span style={{ fontFamily: "ui-monospace, monospace" }}>
+                      {p.referredAddress.slice(0, 8)}…{p.referredAddress.slice(-6)}
+                    </span>
+                    <span style={{ opacity: 0.85 }}>
+                      up to {p.pendingRewardLdx} LDX · {p.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13 }}>LDX reward ledger</div>
+            {ldxRewards.length === 0 ? (
+              <div style={{ fontSize: 13, opacity: 0.8 }}>Verified referrals will create LDX rows here after checks pass.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 8 }}>
+                {ldxRewards.map((rw) => (
+                  <div
+                    key={rw.id}
+                    style={{
+                      padding: 10,
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,255,255,0.10)",
+                      fontSize: 12,
+                      opacity: 0.9,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      flexWrap: "wrap",
+                      gap: 8
+                    }}
+                  >
+                    <span>
+                      {rw.source} · {rw.ldxAmount} LDX
+                    </span>
+                    <span style={{ opacity: 0.75 }}>
+                      {rw.status}
+                      {rw.unlockAt ? ` · unlock ${new Date(rw.unlockAt).toLocaleDateString()}` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+    </Span>
+  );
 }
 
 function ReferralLinkRow({ link, loading }: { link: string; loading: boolean }) {
@@ -81,8 +188,12 @@ export default function ReferralPage() {
   const [link, setLink] = useState<string>("—");
   const [stats, setStats] = useState<ReferralStats | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  const [pendingReferrals, setPendingReferrals] = useState<PendingReferralRow[]>([]);
+  const [ldxRewards, setLdxRewards] = useState<LdxRewardRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const sessionReady = Boolean(wallet.user?.id) && !wallet.needsBackendSession;
 
   useEffect(() => {
     let cancelled = false;
@@ -90,17 +201,25 @@ export default function ReferralPage() {
       try {
         setLoading(true);
         setError(null);
-        const [l, s] = await Promise.all([
-          apiGet<ReferralLinkResponse>(`/v1/referral/link`),
-          apiGet<ReferralStatsResponse>(`/v1/referral/stats`)
-        ]);
+        const s = await apiGet<ReferralStatsResponse>(`/v1/referral/stats`);
         if (cancelled) return;
-        setLink(l.link);
         setStats(s.stats);
         setLedger(s.ledger || []);
+        setPendingReferrals(s.pendingReferrals || []);
+        setLdxRewards(s.ldxRewards || []);
+
+        if (sessionReady) {
+          try {
+            const l = await apiGet<ReferralLinkResponse>(`/v1/referral/link`);
+            if (!cancelled && l.ok) setLink(l.link);
+          } catch (e) {
+            if (!cancelled) setError(e instanceof Error ? e.message : "Could not load referral link");
+          }
+        } else if (!cancelled) {
+          setLink("—");
+        }
       } catch (e) {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Failed to load referral data");
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load referral data");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -108,7 +227,7 @@ export default function ReferralPage() {
     return () => {
       cancelled = true;
     };
-  }, [wallet.user]);
+  }, [wallet.user?.id, wallet.needsBackendSession, sessionReady]);
 
   return (
     <PageShell title="Referral">
@@ -118,6 +237,11 @@ export default function ReferralPage() {
             <Card title="Your referral link" right={<Pill tone="success">Lite</Pill>}>
               <div style={{ display: "grid", gap: 10 }}>
                 <ReferralLinkRow link={link} loading={loading} />
+                {wallet.needsBackendSession && wallet.address ? (
+                  <div style={{ fontSize: 12, opacity: 0.72 }}>
+                    Sign in on the Wallet page to load your personal referral link (saved referral code).
+                  </div>
+                ) : null}
                 {error ? (
                   <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div>
                 ) : null}
@@ -191,6 +315,8 @@ export default function ReferralPage() {
             </Card>
           </Span>
 
+          <ProgramRewardsSection pendingReferrals={pendingReferrals} ldxRewards={ldxRewards} />
+
           <Span col={12}>
             <Card title="Rewards history" right={<Pill tone="info">{ledger.length}</Pill>}>
               {ledger.length === 0 ? (
@@ -245,6 +371,11 @@ export default function ReferralPage() {
                       <Card title="Your referral link" right={<Pill tone="success">Full</Pill>}>
                         <div style={{ display: "grid", gap: 10 }}>
                           <ReferralLinkRow link={link} loading={loading} />
+                          {wallet.needsBackendSession && wallet.address ? (
+                            <div style={{ fontSize: 12, opacity: 0.72 }}>
+                              Sign in on the Wallet page to load your personal referral link (saved referral code).
+                            </div>
+                          ) : null}
                           {error ? (
                             <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div>
                           ) : null}
@@ -271,6 +402,7 @@ export default function ReferralPage() {
                         </div>
                       </Card>
                     </Span>
+                    <ProgramRewardsSection pendingReferrals={pendingReferrals} ldxRewards={ldxRewards} />
                   </Grid>
                 ) : null}
 
@@ -341,6 +473,11 @@ export default function ReferralPage() {
               <Card title="Your referral link" right={<Pill tone="success">Full</Pill>}>
                 <div style={{ display: "grid", gap: 10 }}>
                   <ReferralLinkRow link={link} loading={loading} />
+                  {wallet.needsBackendSession && wallet.address ? (
+                    <div style={{ fontSize: 12, opacity: 0.72 }}>
+                      Sign in on the Wallet page to load your personal referral link (saved referral code).
+                    </div>
+                  ) : null}
                   {error ? <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div> : null}
                 </div>
               </Card>
@@ -373,6 +510,7 @@ export default function ReferralPage() {
                 </Card>
               </div>
             </Span>
+            <ProgramRewardsSection pendingReferrals={pendingReferrals} ldxRewards={ldxRewards} />
           </Grid>
         </ResponsivePanels>
       )}

@@ -20,14 +20,15 @@ export default function AmbassadorRefCapturePage() {
     (async () => {
       try {
         const res = await fetch(`${backendBaseUrl()}/v1/ambassador/resolve/${encodeURIComponent(username)}`);
-        const data = (await res.json()) as { ok?: boolean; refAddress?: string };
+        const data = (await res.json()) as { ok?: boolean; refCode?: string; refAddress?: string };
         if (cancelled) return;
-        if (!res.ok || !data.ok || !data.refAddress) {
+        const code = data.refCode || data.refAddress;
+        if (!res.ok || !data.ok || !code) {
           setErr("Ambassador not found");
           return;
         }
-        setRefCode(data.refAddress);
-        router.replace(`/?ref=${encodeURIComponent(data.refAddress)}`);
+        setRefCode(code);
+        router.replace(`/?ref=${encodeURIComponent(code)}`);
       } catch {
         if (!cancelled) setErr("Could not resolve ambassador");
       }

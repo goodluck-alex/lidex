@@ -3,14 +3,24 @@ const referralLedger = require("./referral.ledger");
 const referralGraph = require("./referral.graph");
 const referralEngine = require("./referral.engine");
 const { prisma } = require("../../lib/prisma");
+const usersModel = require("../users/users.model");
 const ambassadorService = require("../ambassador/ambassador.service");
 
 async function link({ user }) {
+  if (!user?.id || !user?.address) {
+    return { ok: false, error: "not authenticated" };
+  }
+  await usersModel.ensureReferralCodeForUserId(user.id);
+  const full = await prisma.user.findUnique({ where: { id: user.id } });
+  const mapped = usersModel.mapUser(full);
+  if (!mapped?.referralCode) {
+    return { ok: false, error: "referral code unavailable" };
+  }
   return {
     ok: true,
-    link: referralModel.linkForUser(user),
-    code: user?.address ? referralModel.codeForAddress(user.address) : null,
-    user: user || null,
+    link: referralModel.linkFromStoredReferralCode(mapped.referralCode),
+    code: mapped.referralCode,
+    user: mapped,
   };
 }
 
@@ -18,9 +28,10 @@ async function stats({ user }) {
   const stats = referralModel.emptyStats();
   const ledger = user?.address ? await referralLedger.listByUserAddress(user.address) : [];
 
-  // New system: “earnedUsd” is not derived from referral ledger (it’s token-based rewards).
-  // Keep the field for backwards-compatible UI; report unlocked + locked LDX as USD=0 for now.
   stats.earnedUsd = 0;
+
+  let pendingReferrals = [];
+  let ldxRewards = [];
 
   if (user?.address) {
     const a = String(user.address).toLowerCase();
@@ -35,7 +46,40 @@ async function stats({ user }) {
     stats.referredUsers = [];
   }
 
-  return { ok: true, stats, ledger, user: user || null };
+  if (user?.id) {
+    const pr = await prisma.referral.findMany({
+      where: { referrerUserId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+      include: { referred: { select: { address: true } } },
+    });
+    pendingReferrals = pr
+      .filter((r) => r.status === "pending")
+      .map((r) => ({
+        id: r.id,
+        referredAddress: String(r.referred.address).toLowerCase(),
+        pendingRewardLdx: r.pendingRewardLdx,
+        status: r.status,
+        createdAt: r.createdAt.getTime(),
+      }));
+
+    const rewards = await prisma.reward.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+    });
+    ldxRewards = rewards.map((rw) => ({
+      id: rw.id,
+      source: rw.source,
+      ldxAmount: rw.ldxAmount,
+      status: rw.status,
+      referralId: rw.referralId,
+      unlockAt: rw.unlockAt ? rw.unlockAt.getTime() : null,
+      createdAt: rw.createdAt.getTime(),
+    }));
+  }
+
+  return { ok: true, stats, ledger, user: user || null, pendingReferrals, ldxRewards };
 }
 
 async function users({ user }) {
@@ -53,19 +97,18 @@ async function attach({ user, refCode }) {
   const raw = String(refCode || "").trim();
   if (raw.length > 128) return { ok: false, error: "invalid ref code" };
 
-  const result = await referralEngine.recordReferral({ referrerAddress: raw, referredUser: user });
+  const result = await referralEngine.recordReferral({ refCode: raw, referredUser: user });
   if (!result.ok) return result;
 
-  // Keep Phase-1 attachment edge for UI/legacy stats until those screens are upgraded.
-  const parentAddress = String(raw).toLowerCase();
+  const referrerWallet = result.referrerAddress ? String(result.referrerAddress).toLowerCase() : null;
   const childAddr = String(user.address).toLowerCase();
-  void referralGraph.recordAttachment(parentAddress, childAddr).catch(() => {});
-  void ambassadorService.onReferralAttached(parentAddress, childAddr);
+  if (result.recorded && referrerWallet) {
+    void referralGraph.recordAttachment(referrerWallet, childAddr).catch(() => {});
+    void ambassadorService.onReferralAttached(referrerWallet, childAddr);
+  }
 
-  // Best-effort validation attempt (may remain pending until 24h or activity).
   if (result.referral?.id) void referralEngine.validateReferral({ referralId: result.referral.id }).catch(() => {});
 
-  // Fetch current parent for response compatibility.
   const refreshed = await prisma.user.findUnique({ where: { id: user.id } });
   const referralParent = refreshed?.referralParentAddress ? String(refreshed.referralParentAddress).toLowerCase() : null;
   return { ok: true, attached: Boolean(result.recorded), referralParent };

@@ -10,6 +10,8 @@ datasource db {
 model User {
   id                    String   @id @default(cuid())
   address               String   @unique
+  /// Public share code for ?ref= (assigned after first DB persist / login).
+  referralCode          String?  @unique @map("referral_code")
   /// active | banned (future: restricted, watchlist, etc.)
   status                String   @default("active")
   referralParentAddress String?  @map("referral_parent_address")

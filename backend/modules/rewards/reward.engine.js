@@ -22,35 +22,37 @@ async function ensureBalanceForUser(tx, user) {
   });
 }
 
-async function createPendingReward({ userId, walletAddress, source, amountLdx, unlockAt, referralId = null }) {
+async function createPendingRewardInTransaction(tx, { userId, walletAddress, source, amountLdx, unlockAt, referralId = null }) {
   const wallet = String(walletAddress).toLowerCase();
-  return prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({ where: { id: userId } });
-    if (!user) throw new Error("user not found");
-    if (String(user.address).toLowerCase() !== wallet) throw new Error("wallet mismatch");
+  const user = await tx.user.findUnique({ where: { id: userId } });
+  if (!user) throw new Error("user not found");
+  if (String(user.address).toLowerCase() !== wallet) throw new Error("wallet mismatch");
 
-    const reward = await tx.reward.create({
-      data: {
-        userId,
-        source: String(source),
-        ldxAmount: toDec(amountLdx),
-        status: "pending",
-        unlockAt: unlockAt instanceof Date ? unlockAt : null,
-        referralId: referralId ? String(referralId) : null,
-      },
-    });
-
-    const bal = await ensureBalanceForUser(tx, user);
-    await tx.tokenBalance.update({
-      where: { wallet: bal.wallet },
-      data: {
-        totalEarned: addDec(bal.totalEarned, reward.ldxAmount),
-        locked: addDec(bal.locked, reward.ldxAmount),
-      },
-    });
-
-    return reward;
+  const reward = await tx.reward.create({
+    data: {
+      userId,
+      source: String(source),
+      ldxAmount: toDec(amountLdx),
+      status: "pending",
+      unlockAt: unlockAt instanceof Date ? unlockAt : null,
+      referralId: referralId ? String(referralId) : null,
+    },
   });
+
+  const bal = await ensureBalanceForUser(tx, user);
+  await tx.tokenBalance.update({
+    where: { wallet: bal.wallet },
+    data: {
+      totalEarned: addDec(bal.totalEarned, reward.ldxAmount),
+      locked: addDec(bal.locked, reward.ldxAmount),
+    },
+  });
+
+  return reward;
+}
+
+async function createPendingReward(opts) {
+  return prisma.$transaction(async (tx) => createPendingRewardInTransaction(tx, opts));
 }
 
 async function unlockDueRewards({ now = new Date() } = {}) {
@@ -90,5 +92,5 @@ async function unlockDueRewards({ now = new Date() } = {}) {
   return { ok: true, unlocked };
 }
 
-module.exports = { createPendingReward, unlockDueRewards };
+module.exports = { createPendingReward, createPendingRewardInTransaction, unlockDueRewards };
 

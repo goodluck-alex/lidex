@@ -1,5 +1,6 @@
 const Decimal = require("decimal.js");
 const { prisma } = require("../../lib/prisma");
+const usersModel = require("../users/users.model");
 
 const POINTS = { signup: 1, active: 3, trader: 5, deposit: 7 };
 
@@ -236,7 +237,15 @@ async function resolveUsername(username) {
     include: { user: { select: { address: true } } }
   });
   if (!profile) return { ok: false, error: "not found" };
-  return { ok: true, refAddress: String(profile.user.address).toLowerCase(), username: profile.publicUsername };
+  await usersModel.ensureReferralCodeForUserId(profile.userId);
+  const refreshed = await prisma.user.findUnique({
+    where: { id: profile.userId },
+    select: { address: true, referralCode: true }
+  });
+  const refCode = refreshed?.referralCode ? String(refreshed.referralCode) : null;
+  if (!refCode) return { ok: false, error: "referral unavailable" };
+  const refAddress = String(refreshed.address).toLowerCase();
+  return { ok: true, refCode, refAddress, username: profile.publicUsername };
 }
 
 async function apply({ user, body }) {

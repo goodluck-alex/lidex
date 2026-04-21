@@ -11,22 +11,41 @@ function isAddressLike(a) {
   return s.startsWith("0x") && s.length === 42;
 }
 
-async function recordReferral({ referrerAddress, referredUser }) {
-  if (!referredUser?.id || !referredUser?.address) throw new Error("not authenticated");
-  const referrerWallet = normalizeAddress(referrerAddress);
-  const referredWallet = normalizeAddress(referredUser.address);
-  if (!isAddressLike(referrerWallet)) return { ok: false, error: "invalid ref code" };
-  if (referrerWallet === referredWallet) return { ok: false, error: "cannot refer yourself" };
+function referralVerifyMinAgeMs() {
+  const n = Number(process.env.REFERRAL_VERIFY_MIN_MS);
+  if (Number.isFinite(n) && n >= 0) return n;
+  return 24 * 60 * 60 * 1000;
+}
 
-  const referrer = await prisma.user.findUnique({ where: { address: referrerWallet } });
+async function resolveReferrerFromRefCode(refCode) {
+  const raw = String(refCode || "").trim();
+  if (!raw || raw.length > 128) return null;
+  if (isAddressLike(raw)) {
+    return prisma.user.findUnique({ where: { address: normalizeAddress(raw) } });
+  }
+  return prisma.user.findFirst({
+    where: { referralCode: { equals: raw, mode: "insensitive" } },
+  });
+}
+
+/**
+ * @param {{ refCode: string, referredUser: { id: string, address: string, referralParent?: string|null } }} p
+ */
+async function recordReferral({ refCode, referredUser }) {
+  if (!referredUser?.id || !referredUser?.address) throw new Error("not authenticated");
+  const referredWallet = normalizeAddress(referredUser.address);
+
+  const referrer = await resolveReferrerFromRefCode(refCode);
   if (!referrer) return { ok: false, error: "referrer not found" };
 
-  // If already has a parent, keep current behavior (first referral wins).
+  const referrerWallet = normalizeAddress(referrer.address);
+  if (referrerWallet === referredWallet) return { ok: false, error: "cannot refer yourself" };
+  if (referrer.id === referredUser.id) return { ok: false, error: "cannot refer yourself" };
+
   if (referredUser.referralParent) {
-    return { ok: true, recorded: false, reason: "already_attached" };
+    return { ok: true, recorded: false, reason: "already_attached", referrerAddress: referrerWallet };
   }
 
-  // Enforce a strict “tree”: no cycles (walk up the referrer chain; depth cap for safety).
   const maxDepth = 32;
   let cursor = referrer;
   for (let depth = 0; depth < maxDepth; depth += 1) {
@@ -38,32 +57,41 @@ async function recordReferral({ referrerAddress, referredUser }) {
     cursor = next;
   }
 
-  // Transaction: set user parent once + create referral row once.
-  const result = await prisma.$transaction(async (tx) => {
-    const updated = await tx.user.updateMany({
-      where: { id: referredUser.id, referralParentAddress: null },
-      data: { referralParentAddress: referrerWallet },
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const updated = await tx.user.updateMany({
+        where: { id: referredUser.id, referralParentAddress: null },
+        data: { referralParentAddress: referrerWallet },
+      });
+
+      if (updated.count !== 1) {
+        return { recorded: false, referral: null };
+      }
+
+      const referral = await tx.referral.create({
+        data: {
+          referrerUserId: referrer.id,
+          referredUserId: referredUser.id,
+          status: "pending",
+          pendingRewardLdx: "10",
+        },
+      });
+
+      return { recorded: true, referral };
     });
 
-    // If concurrent attach happened, keep idempotent behavior.
-    if (updated.count !== 1) {
-      return { recorded: false, referral: null };
+    return {
+      ok: true,
+      recorded: result.recorded,
+      referral: result.referral,
+      referrerAddress: referrerWallet,
+    };
+  } catch (e) {
+    if (e?.code === "P2002") {
+      return { ok: false, error: "referral already recorded for this wallet" };
     }
-
-    // One referral per referred user (unique by referredUserId).
-    const referral = await tx.referral.create({
-      data: {
-        referrerUserId: referrer.id,
-        referredUserId: referredUser.id,
-        status: "pending",
-        pendingRewardLdx: "10",
-      },
-    });
-
-    return { recorded: true, referral };
-  });
-
-  return { ok: true, recorded: result.recorded, referral: result.referral };
+    throw e;
+  }
 }
 
 async function validateReferral({ referralId, now = new Date() } = {}) {
@@ -82,15 +110,17 @@ async function validateReferral({ referralId, now = new Date() } = {}) {
     return { ok: true, referral: { ...referral, status: "rejected" }, validated: true, reason: "self" };
   }
 
-  // Anti-bot heuristics (MVP): must be 24h old OR show activity (login/swap/trade) after attach.
+  const minAgeMs = referralVerifyMinAgeMs();
+  const delayOk = ts.getTime() - referral.createdAt.getTime() >= minAgeMs;
+
   const walletAgeOk = referral.referred.createdAt <= new Date(ts.getTime() - 24 * 60 * 60 * 1000);
   const recentActivityCount = await activityService.countRecent({
     walletAddress: referredWallet,
     since: referral.createdAt,
   });
   const activityOk = recentActivityCount > 0;
+  const validationOk = walletAgeOk || activityOk;
 
-  // Upsert check rows (idempotent).
   await prisma.referralCheck.upsert({
     where: { referralId_checkType: { referralId: referral.id, checkType: "wallet_age" } },
     create: { referralId: referral.id, checkType: "wallet_age", status: walletAgeOk ? "pass" : "fail" },
@@ -101,13 +131,17 @@ async function validateReferral({ referralId, now = new Date() } = {}) {
     create: { referralId: referral.id, checkType: "activity", status: activityOk ? "pass" : "fail" },
     update: { status: activityOk ? "pass" : "fail", checkedAt: ts },
   });
+  await prisma.referralCheck.upsert({
+    where: { referralId_checkType: { referralId: referral.id, checkType: "delay" } },
+    create: { referralId: referral.id, checkType: "delay", status: delayOk ? "pass" : "fail" },
+    update: { status: delayOk ? "pass" : "fail", checkedAt: ts },
+  });
 
-  if (!walletAgeOk && !activityOk) {
+  if (!delayOk || !validationOk) {
     return { ok: true, referral, validated: false, reason: "waiting" };
   }
 
-  // Approve: mark verified and create a pending reward (10 LDX) that unlocks later.
-  const unlockAt = new Date(ts.getTime() + 7 * 24 * 60 * 60 * 1000); // MVP: 7d cliff
+  const unlockAt = new Date(ts.getTime() + 7 * 24 * 60 * 60 * 1000);
   const verified = await prisma.$transaction(async (tx) => {
     const upd = await tx.referral.updateMany({
       where: { id: referral.id, status: "pending" },
@@ -115,11 +149,12 @@ async function validateReferral({ referralId, now = new Date() } = {}) {
     });
     if (upd.count !== 1) return null;
 
-    // Prevent duplicate rewards for same referral.
     const existing = await tx.reward.findFirst({ where: { referralId: referral.id, source: "referral" } });
-    if (existing) return { referral: await tx.referral.findUnique({ where: { id: referral.id } }), reward: existing };
+    if (existing) {
+      return { referral: await tx.referral.findUnique({ where: { id: referral.id } }), reward: existing };
+    }
 
-    const reward = await rewardEngine.createPendingReward({
+    const reward = await rewardEngine.createPendingRewardInTransaction(tx, {
       userId: referral.referrerUserId,
       walletAddress: referrerWallet,
       source: "referral",
@@ -149,4 +184,3 @@ async function validatePendingReferralsForWallet({ walletAddress }) {
 }
 
 module.exports = { recordReferral, validateReferral, validatePendingReferralsForWallet };
-

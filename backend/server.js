@@ -276,10 +276,14 @@ app.get("/v1/presale", requireLidexMode, async (req, res) => {
 });
 
 // Phase 1 (MVP) — Referral
-app.get("/v1/referral/link", referralLimiter, requireLidexMode, async (req, res) => {
-  // If authenticated, return user-specific link; otherwise guest.
-  const result = await referralService.link({ user: req.user || null });
-  res.json(result);
+app.get("/v1/referral/link", referralLimiter, requireLidexMode, requireSessionUser, async (req, res) => {
+  try {
+    const result = await referralService.link({ user: req.user });
+    if (!result.ok) return res.status(400).json(result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "referral link failed" });
+  }
 });
 
 app.get("/v1/referral/stats", referralLimiter, requireLidexMode, async (req, res) => {
@@ -293,10 +297,14 @@ app.get("/v1/referral/users", referralLimiter, requireLidexMode, async (req, res
   res.json(result);
 });
 
-app.post("/v1/referral/attach", referralLimiter, requireLidexMode, async (req, res) => {
-  const result = await referralService.attach({ user: req.user || null, refCode: req.body?.refCode });
-  if (result.ok === false) return res.status(400).json(result);
-  res.json(result);
+app.post("/v1/referral/attach", referralLimiter, requireLidexMode, requireSessionUser, async (req, res) => {
+  try {
+    const result = await referralService.attach({ user: req.user, refCode: req.body?.refCode });
+    if (result.ok === false) return res.status(400).json(result);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "referral attach failed" });
+  }
 });
 
 app.post("/v1/referral/ledger/confirm", referralLimiter, requireLidexMode, requireDexMode, async (req, res) => {
