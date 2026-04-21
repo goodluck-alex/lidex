@@ -10,9 +10,12 @@ function codeForAddress(address) {
 }
 
 function linkForUser(user) {
-  const address = user?.address || user?.id || "guest";
-  const code = codeForAddress(address);
   const base = publicAppOrigin();
+  // Only real wallet addresses are valid ref codes (attach rejects non-0x…42).
+  // Do not emit ?ref=guest — that confuses sharers and breaks attach.
+  const address = user?.address ? String(user.address).toLowerCase() : null;
+  if (!address) return `${base}/`;
+  const code = codeForAddress(address);
   return `${base}/?ref=${encodeURIComponent(code)}`;
 }
 
