@@ -7,6 +7,7 @@ import { useMode } from "../context/mode";
 import { LIDEX_TELEGRAM_URL, LIDEX_TWITTER_URL } from "../lib/social";
 import { ModeToggle } from "./ModeToggle";
 import { WalletButton } from "./WalletButton";
+import { useWallet } from "../wallet/useWallet";
 
 function NavLink({
   href,
@@ -34,6 +35,7 @@ function NavLink({
 export function TopNav() {
   const { mode } = useMode();
   const isCex = mode === "cex";
+  const wallet = useWallet();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -185,6 +187,15 @@ export function TopNav() {
           <div className="[&_button]:!min-h-0 [&_button]:!py-1.5">
             <WalletButton />
           </div>
+          {wallet.needsBackendSession ? (
+            <Link
+              href="/wallet"
+              className="hidden shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-[11px] font-bold text-amber-100 hover:bg-amber-500/25 sm:inline"
+              title="Wallet is connected in the browser; sign a message once to sync with Lidex (CEX, referral attach, etc.)."
+            >
+              Sign in
+            </Link>
+          ) : null}
           <ModeToggle />
         </div>
       </div>
@@ -216,6 +227,15 @@ export function TopNav() {
               >
                 Notifications
               </button>
+              {wallet.needsBackendSession ? (
+                <Link
+                  href="/wallet"
+                  className="block w-full rounded-lg border border-amber-500/35 bg-amber-500/10 py-2.5 text-center text-sm font-semibold text-amber-100 hover:bg-amber-500/20"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  Sign in (sync wallet)
+                </Link>
+              ) : null}
             </div>
             <p className="mt-3 px-2 text-[10px] font-semibold uppercase tracking-wider text-white/40">Main</p>
             <div className="flex flex-col gap-0.5">{navMainMobile}</div>

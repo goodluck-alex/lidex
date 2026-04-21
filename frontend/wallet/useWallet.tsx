@@ -22,6 +22,11 @@ type WalletApi = WalletState & {
   refreshMe: () => Promise<void>;
   logout: () => Promise<void>;
   user: { id?: string; address?: string } | null;
+  /**
+   * RainbowKit can show “connected” while the backend has no session cookie yet.
+   * CEX, referral attach, and other `/v1/*` flows need `Sign & Login` on /wallet.
+   */
+  needsBackendSession: boolean;
 };
 
 const Ctx = createContext<WalletApi | null>(null);
@@ -64,6 +69,24 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       }
     })();
   }, []);
+
+  /** After wagmi connects or account changes, re-sync backend session (cookie). */
+  useEffect(() => {
+    if (isConnecting || isReconnecting) return;
+    if (status !== "connected" || !address) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await apiMe();
+        if (!cancelled) setUser(res.user);
+      } catch {
+        if (!cancelled) setUser(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, address, isConnecting, isReconnecting]);
 
   /** Wallet connected but cookie session is for a different address — invalidate session. */
   useEffect(() => {
@@ -120,6 +143,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const numericChainId =
     status === "connected" && chainId != null ? Number(chainId) : null;
 
+  const needsBackendSession = useMemo(() => {
+    if (statusOut !== "connected" || !address) return false;
+    if (!user?.address) return true;
+    return String(user.address).toLowerCase() !== String(address).toLowerCase();
+  }, [statusOut, address, user]);
+
   const api = useMemo<WalletApi>(() => {
     const connect = () => {
       openConnectModal?.();
@@ -162,6 +191,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       refreshMe,
       logout,
       user,
+      needsBackendSession,
     };
   }, [
     statusOut,
@@ -173,6 +203,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     disconnectAsync,
     switchChainAsync,
     user,
+    needsBackendSession,
   ]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;

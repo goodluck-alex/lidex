@@ -38,7 +38,13 @@ export async function apiGet<T>(path: string): Promise<T> {
   });
   const data = (await res.json().catch(() => null)) as T | { ok?: false; error?: string } | null;
   if (!res.ok) {
-    const msg = (data as { error?: string } | null)?.error || `GET ${path} failed: ${res.status}`;
+    const base = baseUrl();
+    const hint404 =
+      res.status === 404
+        ? ` (check NEXT_PUBLIC_BACKEND_URL — currently ${base}; must be your Render API origin, not the Vercel app URL)`
+        : "";
+    const msg =
+      (data as { error?: string } | null)?.error || `GET ${path} failed: ${res.status}${hint404}`;
     throw new Error(msg);
   }
   return data as T;
