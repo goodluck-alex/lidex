@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import React, { useEffect, useState } from "react";
 import { useMode } from "../../context/mode";
 import { Button, Card, Grid, PageShell, Pill, Span } from "../../components/ui";
 import { ResponsivePanels } from "../../components/ResponsivePanels";
@@ -38,13 +37,48 @@ function formatPct(x: number) {
   return `${Math.round(x * 100)}%`;
 }
 
+function ReferralLinkRow({ link, loading }: { link: string; loading: boolean }) {
+  const ready = !loading && Boolean(link) && link !== "—";
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      <div style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", fontSize: 13, opacity: 0.9, wordBreak: "break-all" }}>
+        {loading ? "…" : link}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <Button variant="secondary" disabled={!ready} onClick={() => ready && void navigator.clipboard.writeText(link)}>
+          Copy
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={!ready}
+          onClick={() => {
+            if (!ready) return;
+            void (async () => {
+              try {
+                if (typeof navigator !== "undefined" && navigator.share) {
+                  await navigator.share({ title: "Lidex", url: link });
+                } else {
+                  await navigator.clipboard.writeText(link);
+                }
+              } catch {
+                /* user cancelled share or clipboard denied */
+              }
+            })();
+          }}
+        >
+          Share
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function ReferralPage() {
   const { mode } = useMode();
   const isCex = mode === "cex";
   const wallet = useWallet();
 
   const [link, setLink] = useState<string>("—");
-  const [code, setCode] = useState<string | null>(null);
   const [stats, setStats] = useState<ReferralStats | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +96,6 @@ export default function ReferralPage() {
         ]);
         if (cancelled) return;
         setLink(l.link);
-        setCode(l.code || null);
         setStats(s.stats);
         setLedger(s.ledger || []);
       } catch (e) {
@@ -77,53 +110,14 @@ export default function ReferralPage() {
     };
   }, [wallet.user]);
 
-  const shareLinkReady = Boolean(code);
-  const linkDisplay = useMemo(() => {
-    if (loading) return "…";
-    if (shareLinkReady) return link;
-    return "Your personal link (?ref=0x…) appears after you connect your wallet and sign in once on Wallet.";
-  }, [loading, shareLinkReady, link]);
-
-  const signInCta = !loading && !shareLinkReady && (
-    <div style={{ display: "grid", gap: 10 }}>
-      <p style={{ margin: 0, fontSize: 12, opacity: 0.78, lineHeight: 1.55 }}>
-        RainbowKit “connected” is not enough: Lidex needs a short <strong>signed message</strong> so the API can attach referrals and show your stats.
-      </p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {wallet.status !== "connected" ? (
-          <Button onClick={() => wallet.connect()}>Connect wallet</Button>
-        ) : null}
-        {wallet.needsBackendSession ? (
-          <Link href="/wallet" className="inline-flex">
-            <Button variant="secondary">Open Wallet → Sign in</Button>
-          </Link>
-        ) : null}
-      </div>
-    </div>
-  );
-
   return (
-    <PageShell
-      title="Referral"
-      subtitle="Share your link and track referrals and rewards."
-    >
-      {loading ? (
-        <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 12 }}>Loading referral data…</div>
-      ) : null}
+    <PageShell title="Referral">
       {!isCex ? (
         <Grid>
           <Span col={6}>
             <Card title="Your referral link" right={<Pill tone="success">Lite</Pill>}>
               <div style={{ display: "grid", gap: 10 }}>
-                <div style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", fontSize: 13, opacity: 0.9 }}>
-                  {linkDisplay}
-                </div>
-                {code ? (
-                  <div style={{ fontSize: 12, opacity: 0.72 }}>
-                    Code: <span style={{ opacity: 0.95 }}>{code.slice(0, 10)}…</span>
-                  </div>
-                ) : null}
-                {signInCta}
+                <ReferralLinkRow link={link} loading={loading} />
                 {error ? (
                   <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div>
                 ) : null}
@@ -250,10 +244,7 @@ export default function ReferralPage() {
                     <Span col={12}>
                       <Card title="Your referral link" right={<Pill tone="success">Full</Pill>}>
                         <div style={{ display: "grid", gap: 10 }}>
-                          <div style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", fontSize: 13, opacity: 0.9 }}>
-                            {linkDisplay}
-                          </div>
-                          {signInCta}
+                          <ReferralLinkRow link={link} loading={loading} />
                           {error ? (
                             <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div>
                           ) : null}
@@ -349,10 +340,7 @@ export default function ReferralPage() {
             <Span col={5}>
               <Card title="Your referral link" right={<Pill tone="success">Full</Pill>}>
                 <div style={{ display: "grid", gap: 10 }}>
-                  <div style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", fontSize: 13, opacity: 0.9 }}>
-                    {linkDisplay}
-                  </div>
-                  {signInCta}
+                  <ReferralLinkRow link={link} loading={loading} />
                   {error ? <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div> : null}
                 </div>
               </Card>
