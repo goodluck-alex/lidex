@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useMode } from "../../context/mode";
-import { Card, Grid, PageShell, Pill, Span } from "../../components/ui";
+import { Button, Card, Grid, PageShell, Pill, Span } from "../../components/ui";
 import { ResponsivePanels } from "../../components/ResponsivePanels";
 import { apiGet } from "../../services/api";
 import { useWallet } from "../../wallet/useWallet";
@@ -76,6 +77,31 @@ export default function ReferralPage() {
     };
   }, [wallet.user]);
 
+  const shareLinkReady = Boolean(code);
+  const linkDisplay = useMemo(() => {
+    if (loading) return "…";
+    if (shareLinkReady) return link;
+    return "Your personal link (?ref=0x…) appears after you connect your wallet and sign in once on Wallet.";
+  }, [loading, shareLinkReady, link]);
+
+  const signInCta = !loading && !shareLinkReady && (
+    <div style={{ display: "grid", gap: 10 }}>
+      <p style={{ margin: 0, fontSize: 12, opacity: 0.78, lineHeight: 1.55 }}>
+        RainbowKit “connected” is not enough: Lidex needs a short <strong>signed message</strong> so the API can attach referrals and show your stats.
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {wallet.status !== "connected" ? (
+          <Button onClick={() => wallet.connect()}>Connect wallet</Button>
+        ) : null}
+        {wallet.needsBackendSession ? (
+          <Link href="/wallet" className="inline-flex">
+            <Button variant="secondary">Open Wallet → Sign in</Button>
+          </Link>
+        ) : null}
+      </div>
+    </div>
+  );
+
   return (
     <PageShell
       title="Referral"
@@ -90,13 +116,14 @@ export default function ReferralPage() {
             <Card title="Your referral link" right={<Pill tone="success">Lite</Pill>}>
               <div style={{ display: "grid", gap: 10 }}>
                 <div style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", fontSize: 13, opacity: 0.9 }}>
-                  {loading ? "…" : link}
+                  {linkDisplay}
                 </div>
                 {code ? (
                   <div style={{ fontSize: 12, opacity: 0.72 }}>
                     Code: <span style={{ opacity: 0.95 }}>{code.slice(0, 10)}…</span>
                   </div>
                 ) : null}
+                {signInCta}
                 {error ? (
                   <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div>
                 ) : null}
@@ -224,8 +251,9 @@ export default function ReferralPage() {
                       <Card title="Your referral link" right={<Pill tone="success">Full</Pill>}>
                         <div style={{ display: "grid", gap: 10 }}>
                           <div style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", fontSize: 13, opacity: 0.9 }}>
-                            {link}
+                            {linkDisplay}
                           </div>
+                          {signInCta}
                           {error ? (
                             <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div>
                           ) : null}
@@ -322,8 +350,9 @@ export default function ReferralPage() {
               <Card title="Your referral link" right={<Pill tone="success">Full</Pill>}>
                 <div style={{ display: "grid", gap: 10 }}>
                   <div style={{ padding: 10, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", fontSize: 13, opacity: 0.9 }}>
-                    {link}
+                    {linkDisplay}
                   </div>
+                  {signInCta}
                   {error ? <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div> : null}
                 </div>
               </Card>
