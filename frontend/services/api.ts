@@ -22,8 +22,10 @@ export function lidexModeHeaders(): Record<string, string> {
   return { [LIDEX_MODE_HEADER]: readBrowserLidexMode() };
 }
 
+/** Trim + strip trailing slashes so `${origin}/v1/...` never becomes `//v1/...` (some CDNs return 404). */
 export function backendBaseUrl() {
-  return process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+  const raw = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000").trim();
+  return raw.replace(/\/+$/, "") || "http://localhost:4000";
 }
 
 function baseUrl() {
@@ -41,7 +43,7 @@ export async function apiGet<T>(path: string): Promise<T> {
     const base = baseUrl();
     const hint404 =
       res.status === 404
-        ? ` (check NEXT_PUBLIC_BACKEND_URL — currently ${base}; must be your Render API origin, not the Vercel app URL)`
+        ? ` (check NEXT_PUBLIC_BACKEND_URL — currently "${base}"; use Render API origin with no trailing slash, e.g. https://your-service.onrender.com)`
         : "";
     const msg =
       (data as { error?: string } | null)?.error || `GET ${path} failed: ${res.status}${hint404}`;
