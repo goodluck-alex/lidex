@@ -40,6 +40,9 @@ const adminOpsService = require("./modules/adminOps/adminOps.service");
 const blogService = require("./modules/blog/blog.service");
 const ambassadorService = require("./modules/ambassador/ambassador.service");
 const referralLedger = require("./modules/referral/referral.ledger");
+const activityService = require("./modules/activity/activity.service");
+const referralEngine = require("./modules/referral/referral.engine");
+const { startUnlockEngine } = require("./modules/unlock/unlock.engine");
 const { sessionMiddleware } = require("./middleware/session");
 const {
   createCors,
@@ -66,12 +69,25 @@ if (String(process.env.TRUST_PROXY || "").trim() === "1") {
 }
 
 let stopCexDepositPoller = () => {};
+let stopUnlockEngine = () => {};
 
 app.use(securityHeaders);
 app.use(createCors());
 app.use(express.json({ limit: "1mb" }));
 app.use(sessionMiddleware());
 app.use("/v1", lidexModeMiddleware);
+
+// Record lightweight wallet activity for anti-bot + unlock heuristics.
+// This also opportunistically re-evaluates pending referrals tied to the current wallet.
+app.use((req, res, next) => {
+  if (req.user?.id && req.user?.address) {
+    void activityService
+      .record({ user: req.user, activityType: "login" })
+      .then(() => referralEngine.validatePendingReferralsForWallet({ walletAddress: req.user.address }))
+      .catch(() => {});
+  }
+  next();
+});
 
 app.get("/health", (req, res) => {
   res.json({ ok: true, service: "lidex-backend", ts: Date.now() });
@@ -1245,6 +1261,7 @@ async function start() {
   app.listen(Number(port), "0.0.0.0", () => {
     logDexEnvSummary();
     stopCexDepositPoller = cexOnchain.startDepositPollerIfEnabled();
+    stopUnlockEngine = startUnlockEngine({ intervalMs: Number(process.env.UNLOCK_ENGINE_INTERVAL_MS || 60 * 60 * 1000) });
     // eslint-disable-next-line no-console
     console.log(`Lidex backend listening on 0.0.0.0:${port}`);
   });
@@ -1284,6 +1301,7 @@ async function shutdown(signal) {
   // eslint-disable-next-line no-console
   console.log(`${signal} received, closing…`);
   stopCexDepositPoller();
+  stopUnlockEngine();
   try {
     await disconnect();
   } finally {

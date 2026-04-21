@@ -8,6 +8,8 @@ const referralLedger = require("../referral/referral.ledger");
 const referralModel = require("../referral/referral.model");
 const { getOrCreateUserByAddress } = require("../users/users.model");
 const stakingService = require("../staking/staking.service");
+const activityService = require("../activity/activity.service");
+const referralEngine = require("../referral/referral.engine");
 
 function assertRoutableQuote(q) {
   if (q && q.liquidityAvailable === false) {
@@ -84,6 +86,14 @@ async function execute({ body, user }) {
       status: "pending",
       payoutStatus: "unpaid",
     });
+  }
+
+  // Activity engine: any successful quote/execute request indicates intent; treat as swap activity.
+  if (user?.id && user?.address) {
+    void activityService
+      .record({ user, activityType: "swap", amount: q?.buyAmount || null })
+      .then(() => referralEngine.validatePendingReferralsForWallet({ walletAddress: user.address }))
+      .catch(() => {});
   }
 
   return { ok: true, tx, allowanceTarget: q?.allowanceTarget, quote: q, referralReward };

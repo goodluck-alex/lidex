@@ -10,6 +10,8 @@ datasource db {
 model User {
   id                    String   @id @default(cuid())
   address               String   @unique
+  /// active | banned (future: restricted, watchlist, etc.)
+  status                String   @default("active")
   referralParentAddress String?  @map("referral_parent_address")
   preferences           Json     @default("{}")
   createdAt             DateTime @default(now()) @map("created_at")
@@ -35,8 +37,121 @@ model User {
   p2pChatMessages       P2pChatMessage[]
   ambassadorApplication AmbassadorApplication?
   ambassadorProfile     AmbassadorProfile?
+  referralsAsReferrer   Referral[] @relation("ReferralReferrer")
+  referralsAsReferred   Referral[] @relation("ReferralReferred")
+  walletActivities      WalletActivity[]
+  rewards               Reward[]
+  balance               TokenBalance?
 
   @@map("users")
+}
+
+/// Phase 1+ — Core referral engine row (pending → verified → rejected).
+model Referral {
+  id               String    @id @default(cuid())
+  referrerUserId   String    @map("referrer_user_id")
+  referredUserId   String    @unique @map("referred_user_id")
+  /// pending | verified | rejected
+  status           String    @default("pending")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  verifiedAt       DateTime? @map("verified_at")
+  /// Cached “would-be reward” at record time (can be recalculated later).
+  pendingRewardLdx String    @default("10") @map("pending_reward_ldx")
+
+  referrer User @relation("ReferralReferrer", fields: [referrerUserId], references: [id], onDelete: Cascade)
+  referred User @relation("ReferralReferred", fields: [referredUserId], references: [id], onDelete: Cascade)
+  checks   ReferralCheck[]
+
+  @@index([referrerUserId, createdAt])
+  @@index([status, createdAt])
+  @@map("referrals")
+}
+
+/// Anti-bot / validation checks for a referral (append-only, idempotent per type).
+model ReferralCheck {
+  id         String   @id @default(cuid())
+  referralId String   @map("referral_id")
+  /// wallet_age | activity | delay | duplicate | other
+  checkType  String   @map("check_type")
+  /// pass | fail | skip
+  status     String
+  checkedAt  DateTime @default(now()) @map("checked_at")
+
+  referral Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+
+  @@unique([referralId, checkType])
+  @@index([referralId])
+  @@map("referral_checks")
+}
+
+/// Activity engine: append-only activity events per wallet/user.
+model WalletActivity {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  wallet       String   @map("wallet_address")
+  /// trade | hold | swap | login | deposit | withdraw | other
+  activityType String   @map("activity_type")
+  amount       String?  @map("amount")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([wallet, createdAt])
+  @@index([activityType, createdAt])
+  @@map("wallet_activity")
+}
+
+/// Reward engine: core LDX rewards lifecycle.
+model Reward {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  /// referral | activity | bonus
+  source    String
+  ldxAmount String   @map("ldx_amount")
+  /// pending | unlocked | claimed | rejected
+  status    String   @default("pending")
+  createdAt DateTime @default(now()) @map("created_at")
+  unlockAt  DateTime? @map("unlock_at")
+  /// Optional link back to a referral row.
+  referralId String? @map("referral_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, unlockAt])
+  @@index([referralId])
+  @@map("rewards")
+}
+
+/// Cached token balance aggregates (derived from rewards; updated transactionally).
+model TokenBalance {
+  wallet      String @id @map("wallet_address")
+  userId      String @unique @map("user_id")
+  totalEarned String @default("0") @map("total_earned")
+  locked      String @default("0")
+  unlocked    String @default("0")
+  claimed     String @default("0")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("balances")
+}
+
+/// Configurable unlock / vesting rules.
+model UnlockRule {
+  id               String   @id @default(cuid())
+  /// trade | hold | referral | time | other
+  ruleType         String   @map("rule_type")
+  /// JSON string or simple DSL (kept as string for MVP).
+  condition        String
+  unlockPercentage Int      @map("unlock_percentage")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([ruleType])
+  @@map("unlock_rules")
 }
 
 /// Phase 2 — Lidex Ambassador Program (application + profile).
