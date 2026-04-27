@@ -608,6 +608,26 @@ model DexPairActivation {
   @@map("dex_pair_activations")
 }
 
+/// DEX telemetry (Phase 2): best-effort logging of quote/execute outcomes.
+model DexSwapEvent {
+  id        String   @id @default(cuid())
+  kind      String   // quote | execute
+  provider  String   @default("0x")
+  chainId   Int      @map("chain_id")
+  sellToken String   @map("sell_token")
+  buyToken  String   @map("buy_token")
+  sellAmount String  @map("sell_amount")
+  buyAmount  String? @map("buy_amount")
+  ok        Boolean  @default(true)
+  code      String?  // error code when ok=false
+  message   String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([kind, createdAt])
+  @@index([chainId, createdAt])
+  @@map("dex_swap_events")
+}
+
 /// Limit orders against the internal CEX book (no 0x). Price/qty/filled are decimal strings for product symbols.
 model CexOrder {
   id        String   @id @default(cuid())

@@ -39,6 +39,9 @@ function securityHeaders(req, res, next) {
 function jsonRateLimitExceeded(req, res, next, options) {
   res.status(options.statusCode).json({
     ok: false,
+    code: "RATE_LIMITED",
+    message: "too many requests",
+    // backward compatibility
     error: "too many requests",
   });
 }

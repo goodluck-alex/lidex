@@ -5,6 +5,7 @@ const express = require("express");
 const referralService = require("./modules/referral/referral.service");
 const marketsService = require("./modules/markets/markets.service");
 const swapService = require("./modules/swap/swap.service");
+const swapTelemetry = require("./modules/swap/swap.telemetry");
 const feesService = require("./modules/fees/fees.service");
 const pairsService = require("./modules/pairs/pairs.service");
 const presaleService = require("./modules/presale/presale.service");
@@ -35,6 +36,8 @@ const {
 const { getOrCreateUserByAddress } = require("./modules/users/users.model");
 const { prisma, disconnect } = require("./lib/prisma");
 const { logDexEnvSummary, logDexPairActivationDbSummary } = require("./lib/dexPairsFromEnv");
+const { toPublicError } = require("./lib/publicErrors");
+const routabilityPrefetch = require("./modules/swap0x/routability.prefetch");
 const dexPairActivationService = require("./modules/dex/dexPairActivation.service");
 const adminOpsService = require("./modules/adminOps/adminOps.service");
 const blogService = require("./modules/blog/blog.service");
@@ -70,6 +73,7 @@ if (String(process.env.TRUST_PROXY || "").trim() === "1") {
 
 let stopCexDepositPoller = () => {};
 let stopUnlockEngine = () => {};
+let stopRoutabilityPrefetch = () => {};
 
 app.use(securityHeaders);
 app.use(createCors());
@@ -1035,9 +1039,34 @@ app.get("/v1/cex/ledger", requireLidexMode, requireCexMode, requireCexUser, asyn
 app.post("/v1/swap/quote", requireLidexMode, requireDexMode, swapQuoteLimiter, async (req, res) => {
   try {
     const result = await swapService.quote({ body: req.body || {} });
+    void swapTelemetry.record({
+      kind: "quote",
+      provider: result?.summary?.provider || "0x",
+      chainId: Number(req.body?.chainId || 0),
+      sellToken: String(req.body?.sellToken || ""),
+      buyToken: String(req.body?.buyToken || ""),
+      sellAmount: String(req.body?.sellAmount || ""),
+      buyAmount: result?.summary?.buyAmount || null,
+      ok: true,
+      code: null,
+      message: null,
+    });
     res.json(result);
   } catch (e) {
-    res.status(e?.statusCode || 500).json({ ok: false, error: e?.message || "swap quote failed", details: e?.details });
+    const out = toPublicError(e, { fallbackMessage: "swap quote failed" });
+    void swapTelemetry.record({
+      kind: "quote",
+      provider: "unknown",
+      chainId: Number(req.body?.chainId || 0),
+      sellToken: String(req.body?.sellToken || ""),
+      buyToken: String(req.body?.buyToken || ""),
+      sellAmount: String(req.body?.sellAmount || ""),
+      buyAmount: null,
+      ok: false,
+      code: out.body?.code || "INTERNAL_ERROR",
+      message: out.body?.message || null,
+    });
+    res.status(out.statusCode).json(out.body);
   }
 });
 
@@ -1045,9 +1074,34 @@ app.post("/v1/swap/quote", requireLidexMode, requireDexMode, swapQuoteLimiter, a
 app.post("/v1/swap/execute", requireLidexMode, requireDexMode, swapExecuteLimiter, async (req, res) => {
   try {
     const result = await swapService.execute({ body: req.body || {}, user: req.user || null });
+    void swapTelemetry.record({
+      kind: "execute",
+      provider: result?.summary?.provider || "0x",
+      chainId: Number(req.body?.chainId || 0),
+      sellToken: String(req.body?.sellToken || ""),
+      buyToken: String(req.body?.buyToken || ""),
+      sellAmount: String(req.body?.sellAmount || ""),
+      buyAmount: result?.summary?.buyAmount || null,
+      ok: true,
+      code: null,
+      message: null,
+    });
     res.json(result);
   } catch (e) {
-    res.status(e?.statusCode || 500).json({ ok: false, error: e?.message || "swap execute failed", details: e?.details });
+    const out = toPublicError(e, { fallbackMessage: "swap execute failed" });
+    void swapTelemetry.record({
+      kind: "execute",
+      provider: "unknown",
+      chainId: Number(req.body?.chainId || 0),
+      sellToken: String(req.body?.sellToken || ""),
+      buyToken: String(req.body?.buyToken || ""),
+      sellAmount: String(req.body?.sellAmount || ""),
+      buyAmount: null,
+      ok: false,
+      code: out.body?.code || "INTERNAL_ERROR",
+      message: out.body?.message || null,
+    });
+    res.status(out.statusCode).json(out.body);
   }
 });
 
@@ -1268,6 +1322,7 @@ async function start() {
   // Bind all interfaces — required on Render, Railway, Fly, etc. (not only localhost).
   app.listen(Number(port), "0.0.0.0", () => {
     logDexEnvSummary();
+    stopRoutabilityPrefetch = routabilityPrefetch.start();
     stopCexDepositPoller = cexOnchain.startDepositPollerIfEnabled();
     stopUnlockEngine = startUnlockEngine({ intervalMs: Number(process.env.UNLOCK_ENGINE_INTERVAL_MS || 60 * 60 * 1000) });
     // eslint-disable-next-line no-console
@@ -1310,6 +1365,7 @@ async function shutdown(signal) {
   console.log(`${signal} received, closing…`);
   stopCexDepositPoller();
   stopUnlockEngine();
+  stopRoutabilityPrefetch();
   try {
     await disconnect();
   } finally {
