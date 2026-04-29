@@ -24,6 +24,25 @@ async function link({ user }) {
   };
 }
 
+async function linkForAddress({ address }) {
+  const raw = String(address || "").trim();
+  if (!raw) return { ok: false, error: "address required" };
+
+  // NOTE: This endpoint trusts `address` coming from the connected wallet.
+  // Attribution rewards still require referral attach (signed session) as before.
+  const mapped = await usersModel.getOrCreateUserByAddress(raw);
+  if (!mapped?.referralCode) {
+    return { ok: false, error: "referral code unavailable" };
+  }
+
+  return {
+    ok: true,
+    link: referralModel.linkFromStoredReferralCode(mapped.referralCode),
+    code: mapped.referralCode,
+    user: mapped,
+  };
+}
+
 async function stats({ user }) {
   const stats = referralModel.emptyStats();
   const ledger = user?.address ? await referralLedger.listByUserAddress(user.address) : [];
@@ -114,4 +133,4 @@ async function attach({ user, refCode }) {
   return { ok: true, attached: Boolean(result.recorded), referralParent };
 }
 
-module.exports = { link, stats, users, attach };
+module.exports = { link, linkForAddress, stats, users, attach };

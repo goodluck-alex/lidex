@@ -280,9 +280,12 @@ app.get("/v1/presale", requireLidexMode, async (req, res) => {
 });
 
 // Phase 1 (MVP) — Referral
-app.get("/v1/referral/link", referralLimiter, requireLidexMode, requireSessionUser, async (req, res) => {
+app.get("/v1/referral/link", referralLimiter, requireLidexMode, async (req, res) => {
   try {
-    const result = await referralService.link({ user: req.user });
+    const result =
+      req?.user?.id && req?.user?.address
+        ? await referralService.link({ user: req.user })
+        : await referralService.linkForAddress({ address: req.query?.address || req?.user?.address });
     if (!result.ok) return res.status(400).json(result);
     res.json(result);
   } catch (e) {

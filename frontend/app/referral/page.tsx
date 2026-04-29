@@ -193,8 +193,6 @@ export default function ReferralPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const sessionReady = Boolean(wallet.user?.id) && !wallet.needsBackendSession;
-
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -208,9 +206,11 @@ export default function ReferralPage() {
         setPendingReferrals(s.pendingReferrals || []);
         setLdxRewards(s.ldxRewards || []);
 
-        if (sessionReady) {
+        if (wallet.address) {
           try {
-            const l = await apiGet<ReferralLinkResponse>(`/v1/referral/link`);
+            const l = await apiGet<ReferralLinkResponse>(
+              `/v1/referral/link?address=${encodeURIComponent(wallet.address)}`
+            );
             if (!cancelled && l.ok) setLink(l.link);
           } catch (e) {
             if (!cancelled) setError(e instanceof Error ? e.message : "Could not load referral link");
@@ -227,7 +227,7 @@ export default function ReferralPage() {
     return () => {
       cancelled = true;
     };
-  }, [wallet.user?.id, wallet.needsBackendSession, sessionReady]);
+  }, [wallet.address]);
 
   return (
     <PageShell title="Referral">
@@ -237,11 +237,6 @@ export default function ReferralPage() {
             <Card title="Your referral link" right={<Pill tone="success">Lite</Pill>}>
               <div style={{ display: "grid", gap: 10 }}>
                 <ReferralLinkRow link={link} loading={loading} />
-                {wallet.needsBackendSession && wallet.address ? (
-                  <div style={{ fontSize: 12, opacity: 0.72 }}>
-                    Sign in on the Wallet page to load your personal referral link (saved referral code).
-                  </div>
-                ) : null}
                 {error ? (
                   <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div>
                 ) : null}
@@ -371,11 +366,6 @@ export default function ReferralPage() {
                       <Card title="Your referral link" right={<Pill tone="success">Full</Pill>}>
                         <div style={{ display: "grid", gap: 10 }}>
                           <ReferralLinkRow link={link} loading={loading} />
-                          {wallet.needsBackendSession && wallet.address ? (
-                            <div style={{ fontSize: 12, opacity: 0.72 }}>
-                              Sign in on the Wallet page to load your personal referral link (saved referral code).
-                            </div>
-                          ) : null}
                           {error ? (
                             <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div>
                           ) : null}
@@ -473,11 +463,6 @@ export default function ReferralPage() {
               <Card title="Your referral link" right={<Pill tone="success">Full</Pill>}>
                 <div style={{ display: "grid", gap: 10 }}>
                   <ReferralLinkRow link={link} loading={loading} />
-                  {wallet.needsBackendSession && wallet.address ? (
-                    <div style={{ fontSize: 12, opacity: 0.72 }}>
-                      Sign in on the Wallet page to load your personal referral link (saved referral code).
-                    </div>
-                  ) : null}
                   {error ? <div style={{ fontSize: 12, opacity: 0.72 }}>Error: {error}</div> : null}
                 </div>
               </Card>
