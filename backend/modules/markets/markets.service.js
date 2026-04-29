@@ -3,8 +3,17 @@ const marketsStats = require("./markets.stats");
 const marketsCandles = require("./markets.candles");
 const { fetchKlines } = require("./markets.binanceKlines");
 
-async function pairs() {
-  return { ok: true, ...(await marketsModel.listPairs()) };
+async function pairs({ lidexMode } = {}) {
+  const listed = await marketsModel.listPairs();
+  // DEX UI should show only pairs that are actually tradable (no "coming soon" surfaces).
+  if (lidexMode === "dex") {
+    return {
+      ok: true,
+      active: (listed.active || []).filter((p) => p?.routableOn0x !== false),
+      comingSoon: [],
+    };
+  }
+  return { ok: true, ...listed };
 }
 
 async function stats() {

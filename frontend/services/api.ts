@@ -38,7 +38,10 @@ export async function apiGet<T>(path: string): Promise<T> {
     credentials: "include",
     headers: { ...lidexModeHeaders() }
   });
-  const data = (await res.json().catch(() => null)) as T | { ok?: false; error?: string } | null;
+  const data = (await res.json().catch(() => null)) as
+    | T
+    | { ok?: false; error?: string; message?: string; code?: string }
+    | null;
   if (!res.ok) {
     const base = baseUrl();
     const hint404 =
@@ -46,7 +49,9 @@ export async function apiGet<T>(path: string): Promise<T> {
         ? ` (check NEXT_PUBLIC_BACKEND_URL — currently "${base}"; use Render API origin with no trailing slash, e.g. https://your-service.onrender.com)`
         : "";
     const msg =
-      (data as { error?: string } | null)?.error || `GET ${path} failed: ${res.status}${hint404}`;
+      (data as any)?.message ||
+      (data as any)?.error ||
+      `GET ${path} failed: ${res.status}${hint404}`;
     throw new Error(msg);
   }
   return data as T;
@@ -61,7 +66,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   });
   const data = (await res.json().catch(() => null)) as T | null;
   if (!res.ok) {
-    const msg = (data as any)?.error || `POST ${path} failed: ${res.status}`;
+    const msg = (data as any)?.message || (data as any)?.error || `POST ${path} failed: ${res.status}`;
     throw new Error(msg);
   }
   return data as T;
@@ -76,7 +81,7 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   });
   const data = (await res.json().catch(() => null)) as T | null;
   if (!res.ok) {
-    const msg = (data as any)?.error || `PATCH ${path} failed: ${res.status}`;
+    const msg = (data as any)?.message || (data as any)?.error || `PATCH ${path} failed: ${res.status}`;
     throw new Error(msg);
   }
   return data as T;
@@ -90,7 +95,7 @@ export async function apiDelete<T>(path: string): Promise<T> {
   });
   const data = (await res.json().catch(() => null)) as T | null;
   if (!res.ok) {
-    const msg = (data as any)?.error || `DELETE ${path} failed: ${res.status}`;
+    const msg = (data as any)?.message || (data as any)?.error || `DELETE ${path} failed: ${res.status}`;
     throw new Error(msg);
   }
   return data as T;

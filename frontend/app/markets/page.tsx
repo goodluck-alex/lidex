@@ -9,11 +9,8 @@ import { Card, Grid, PageShell, Pill, Span } from "../../components/ui";
 import { ResponsivePanels } from "../../components/ResponsivePanels";
 import { apiGet } from "../../services/api";
 import { CandlesChart, type Candle } from "../../components/CandlesChart";
-import { chainName } from "../../utils/chains";
 
 type MarketTokenMeta = { symbol: string; name: string; logoUrl: string | null };
-
-const LDX_PAIR_META: MarketTokenMeta = { symbol: "LDX", name: "Lidex", logoUrl: "/lidex-logo.png" };
 
 function MiniAvatar({ url }: { url: string | null }) {
   if (!url) {
@@ -41,7 +38,8 @@ function Row({
   quoteToken,
   price,
   change,
-  volume
+  volume,
+  badge
 }: {
   title: string;
   baseToken?: MarketTokenMeta | null;
@@ -49,6 +47,7 @@ function Row({
   price: string;
   change: string;
   volume: string;
+  badge?: { label: string; detail: string | null } | null;
 }) {
   const isUp = change.trim().startsWith("+");
   const subtitle = baseToken && quoteToken ? `${baseToken.name} · ${quoteToken.name}` : null;
@@ -70,7 +69,24 @@ function Row({
           <MiniAvatar url={quoteToken?.logoUrl ?? null} />
         </div>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700 }}>{title}</div>
+          <div style={{ fontWeight: 700, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span>{title}</span>
+            {badge ? (
+              <span
+                title={badge.detail || undefined}
+                style={{
+                  fontSize: 11,
+                  padding: "2px 8px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.04)",
+                  opacity: badge.label === "Routable" ? 0.85 : 0.65
+                }}
+              >
+                {badge.label}
+              </span>
+            ) : null}
+          </div>
           {subtitle ? (
             <div
               style={{
@@ -83,6 +99,11 @@ function Row({
               }}
             >
               {subtitle}
+            </div>
+          ) : null}
+          {badge?.detail ? (
+            <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {badge.detail}
             </div>
           ) : null}
         </div>
@@ -110,6 +131,16 @@ type Pair = {
   status: "active" | "coming_soon";
   baseToken?: MarketTokenMeta;
   quoteToken?: MarketTokenMeta;
+  routableOn0x?: boolean;
+  routability0x?: {
+    chainId?: number | null;
+    checkedAt?: number | null;
+    legs?: {
+      baseToQuote?: { routable?: boolean; reason?: string | null };
+      quoteToBase?: { routable?: boolean; reason?: string | null };
+    };
+    reason?: string | null;
+  } | null;
 };
 
 function pairMatchesQuery(p: Pair, q: string) {
@@ -119,6 +150,21 @@ function pairMatchesQuery(p: Pair, q: string) {
     .join(" ")
     .toLowerCase();
   return blob.includes(q);
+}
+
+function routabilityLabel(p: Pair): { label: string; detail: string | null } | null {
+  if (p.routableOn0x === true) return { label: "Routable", detail: null };
+  if (p.routableOn0x === false) {
+    const a = p.routability0x?.legs?.baseToQuote;
+    const b = p.routability0x?.legs?.quoteToBase;
+    const detail =
+      a?.reason ||
+      b?.reason ||
+      p.routability0x?.reason ||
+      "No liquidity route found";
+    return { label: "No liquidity", detail: detail ? String(detail).slice(0, 120) : null };
+  }
+  return null;
 }
 
 function listedTokenMatches(
@@ -281,11 +327,6 @@ function MarketsPageContent() {
   const [pairs, setPairs] = useState<PairsResponse | null>(null);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [listingsChainId, setListingsChainId] = useState<number>(56);
-  const [listedTokens, setListedTokens] = useState<
-    { symbol: string; address: string; decimals: number; featured: boolean; name?: string; logoUrl?: string | null }[] | null
-  >(null);
-  const [listedTokensErr, setListedTokensErr] = useState<string | null>(null);
   const userKey = useMemo(() => "phase1", []);
   const [selected, setSelected] = useState<string>("ETH/USDT");
   const [candles, setCandles] = useState<CandlesResponse | null>(null);
@@ -357,50 +398,17 @@ function MarketsPageContent() {
   }, [pairs]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setListedTokensErr(null);
-        const res = await apiGet<{
-          ok: true;
-          chainId: number;
-          tokens: {
-            symbol: string;
-            address: string;
-            decimals: number;
-            featured: boolean;
-            name?: string;
-            logoUrl?: string | null;
-          }[];
-        }>(`/v1/tokens/list?chainId=${Number(listingsChainId)}`);
-        if (cancelled) return;
-        setListedTokens(res.tokens || []);
-      } catch (e) {
-        if (cancelled) return;
-        setListedTokens(null);
-        setListedTokensErr(e instanceof Error ? e.message : "Failed to load listed tokens");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [listingsChainId]);
-
-  useEffect(() => {
     setSearchDraft(qRaw);
   }, [qRaw]);
 
-  const filteredComingSoon = useMemo(
-    () => (pairs?.comingSoon || []).filter((p) => pairMatchesQuery(p, q)),
-    [pairs, q]
-  );
-  const filteredActive = useMemo(() => (pairs?.active || []).filter((p) => pairMatchesQuery(p, q)), [pairs, q]);
+  const filteredActive = useMemo(() => {
+    const rows = (pairs?.active || []).filter((p) => pairMatchesQuery(p, q));
+    // DEX UI should only show pairs that are actually tradable.
+    // If backend routability is enabled, `routableOn0x=false` means "no liquidity".
+    return rows.filter((p) => p.routableOn0x !== false);
+  }, [pairs, q]);
 
-  const filteredListedTokens = useMemo(() => {
-    if (!listedTokens) return null;
-    if (!q) return listedTokens;
-    return listedTokens.filter((t) => listedTokenMatches(t, q));
-  }, [listedTokens, q]);
+  // DEX markets UI intentionally hides "TOKEN/LDX listings" until tradable.
 
   useEffect(() => {
     if (!isCex) {
@@ -460,7 +468,7 @@ function MarketsPageContent() {
               tone={error ? "danger" : "default"}
             >
               <div style={{ display: "grid" }}>
-                {filteredComingSoon.length === 0 && filteredActive.length === 0 && q ? (
+                {filteredActive.length === 0 && q ? (
                   <div style={{ padding: "14px 0", fontSize: 13, opacity: 0.75 }}>
                     No pairs match &ldquo;{qRaw}&rdquo;. Try another symbol or{" "}
                     <button
@@ -492,22 +500,9 @@ function MarketsPageContent() {
                       <div>24h (ref.)</div>
                       <div>Vol 24h (ref.)</div>
                     </div>
-                    {filteredComingSoon.map((p) => {
-                      const row = mergePairStats(p.symbol, stats, refEnrichMap);
-                      return (
-                        <Row
-                          key={p.symbol}
-                          title={`${p.symbol} (Coming Soon)`}
-                          baseToken={p.baseToken}
-                          quoteToken={p.quoteToken}
-                          price={fmtPrice(row.price)}
-                          change={fmtChangePct(row.change24hPct)}
-                          volume={fmtVol(row.volume24hQuote)}
-                        />
-                      );
-                    })}
                     {filteredActive.map((p) => {
                       const row = mergePairStats(p.symbol, stats, refEnrichMap);
+                      const badge = routabilityLabel(p);
                       return (
                         <Row
                           key={p.symbol}
@@ -517,6 +512,7 @@ function MarketsPageContent() {
                           price={fmtPrice(row.price)}
                           change={fmtChangePct(row.change24hPct)}
                           volume={fmtVol(row.volume24hQuote)}
+                          badge={badge}
                         />
                       );
                     })}
@@ -525,82 +521,6 @@ function MarketsPageContent() {
                 {error ? (
                   <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>Error: {error}</div>
                 ) : null}
-              </div>
-            </Card>
-          </Span>
-
-          <Span col={12}>
-            <Card title="TOKEN/LDX listings" right={<Pill tone="info">Coming soon</Pill>}>
-              <div style={{ display: "grid", gap: 10 }}>
-                <div style={{ fontSize: 12, opacity: 0.75, lineHeight: 1.55 }}>
-                  Approved tokens can appear here as <b>TOKEN/LDX</b> per chain once liquidity and routing are live.
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10, alignItems: "center" }}>
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>Chain</div>
-                  <select
-                    value={String(listingsChainId)}
-                    onChange={(e) => setListingsChainId(Number(e.target.value))}
-                    style={{
-                      padding: 10,
-                      borderRadius: 12,
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      background: "transparent",
-                      color: "white",
-                      width: "100%",
-                    }}
-                  >
-                    <option value="56">BNB Chain (56)</option>
-                    <option value="1">Ethereum (1)</option>
-                    <option value="137">Polygon (137)</option>
-                    <option value="42161">Arbitrum (42161)</option>
-                    <option value="43114">Avalanche (43114)</option>
-                  </select>
-                </div>
-
-                <div style={{ fontSize: 12, opacity: 0.75 }}>
-                  Showing: <b>{chainName(listingsChainId)}</b>
-                </div>
-
-                {listedTokensErr ? <div style={{ fontSize: 12, opacity: 0.8 }}>Error: {listedTokensErr}</div> : null}
-                {!listedTokens ? (
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>Loading…</div>
-                ) : listedTokens.length === 0 ? (
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>No approved tokens yet for this chain.</div>
-                ) : filteredListedTokens && filteredListedTokens.length === 0 && q ? (
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>No listed tokens match &ldquo;{qRaw}&rdquo;.</div>
-                ) : (
-                  <div style={{ display: "grid" }}>
-                    <div style={rowHeadGrid}>
-                      <div>Pair</div>
-                      <div>Price</div>
-                      <div>24h</div>
-                      <div>Volume</div>
-                    </div>
-                    {(filteredListedTokens || []).map((t) => (
-                      <Row
-                        key={`${t.symbol}-${t.address}`}
-                        title={`${t.symbol}/LDX (Coming Soon)`}
-                        baseToken={{
-                          symbol: t.symbol,
-                          name: t.name || t.symbol,
-                          logoUrl: t.logoUrl ?? null
-                        }}
-                        quoteToken={LDX_PAIR_META}
-                        price="—"
-                        change="—"
-                        volume="—"
-                      />
-                    ))}
-                  </div>
-                )}
-
-                <div style={{ fontSize: 12, opacity: 0.75 }}>
-                  Want your token listed?{" "}
-                  <Link href="/listings/apply" style={{ color: "#2979ff", textDecoration: "underline" }}>
-                    Submit a listing application
-                  </Link>
-                  . Pairing with <b>LDX</b> may qualify for incentives.
-                </div>
               </div>
             </Card>
           </Span>
@@ -618,7 +538,7 @@ function MarketsPageContent() {
                 {active === "list" ? (
                   <Card title="Markets" right={<Pill tone="info">{error ? "Error" : "Pairs"}</Pill>} tone={error ? "danger" : "default"}>
                     <div style={{ display: "grid" }}>
-                      {filteredComingSoon.length === 0 && filteredActive.length === 0 && q ? (
+                      {filteredActive.length === 0 && q ? (
                         <div style={{ padding: "14px 0", fontSize: 13, opacity: 0.75 }}>No pairs match &ldquo;{qRaw}&rdquo;.</div>
                       ) : (
                         <>
@@ -629,22 +549,9 @@ function MarketsPageContent() {
                             <div>24h (ref.)</div>
                             <div>Vol 24h (ref.)</div>
                           </div>
-                          {filteredComingSoon.map((p) => {
-                            const row = mergePairStats(p.symbol, stats, refEnrichMap);
-                            return (
-                              <Row
-                                key={p.symbol}
-                                title={`${p.symbol} (Coming Soon)`}
-                                baseToken={p.baseToken}
-                                quoteToken={p.quoteToken}
-                                price={fmtPrice(row.price)}
-                                change={fmtChangePct(row.change24hPct)}
-                                volume={fmtVol(row.volume24hQuote)}
-                              />
-                            );
-                          })}
                           {filteredActive.map((p) => {
                             const row = mergePairStats(p.symbol, stats, refEnrichMap);
+                            const badge = routabilityLabel(p);
                             return (
                               <Row
                                 key={p.symbol}
@@ -654,6 +561,7 @@ function MarketsPageContent() {
                                 price={fmtPrice(row.price)}
                                 change={fmtChangePct(row.change24hPct)}
                                 volume={fmtVol(row.volume24hQuote)}
+                                badge={badge}
                               />
                             );
                           })}
@@ -699,7 +607,7 @@ function MarketsPageContent() {
             <Span col={8}>
               <Card title="Markets" right={<Pill tone="info">{error ? "Error" : "Pairs"}</Pill>} tone={error ? "danger" : "default"}>
                 <div style={{ display: "grid" }}>
-                  {filteredComingSoon.length === 0 && filteredActive.length === 0 && q ? (
+                  {filteredActive.length === 0 && q ? (
                     <div style={{ padding: "14px 0", fontSize: 13, opacity: 0.75 }}>No pairs match &ldquo;{qRaw}&rdquo;.</div>
                   ) : (
                     <>
@@ -710,22 +618,9 @@ function MarketsPageContent() {
                         <div>24h (ref.)</div>
                         <div>Vol 24h (ref.)</div>
                       </div>
-                      {filteredComingSoon.map((p) => {
-                        const row = mergePairStats(p.symbol, stats, refEnrichMap);
-                        return (
-                          <Row
-                            key={p.symbol}
-                            title={`${p.symbol} (Coming Soon)`}
-                            baseToken={p.baseToken}
-                            quoteToken={p.quoteToken}
-                            price={fmtPrice(row.price)}
-                            change={fmtChangePct(row.change24hPct)}
-                            volume={fmtVol(row.volume24hQuote)}
-                          />
-                        );
-                      })}
                       {filteredActive.map((p) => {
                         const row = mergePairStats(p.symbol, stats, refEnrichMap);
+                        const badge = routabilityLabel(p);
                         return (
                           <Row
                             key={p.symbol}
@@ -735,6 +630,7 @@ function MarketsPageContent() {
                             price={fmtPrice(row.price)}
                             change={fmtChangePct(row.change24hPct)}
                             volume={fmtVol(row.volume24hQuote)}
+                            badge={badge}
                           />
                         );
                       })}

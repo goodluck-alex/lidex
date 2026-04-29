@@ -356,7 +356,7 @@ app.get("/v1/fees/events", requireLidexMode, requireCexMode, (req, res) => {
 
 // Phase 1 (MVP) — Markets / Pairs
 app.get("/v1/markets/pairs", requireLidexMode, async (req, res) => {
-  const result = await marketsService.pairs();
+  const result = await marketsService.pairs({ lidexMode: req.lidexMode });
   res.json(result);
 });
 

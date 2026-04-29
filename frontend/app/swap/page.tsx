@@ -18,18 +18,19 @@ type ExecuteResponse = { ok: true; tx: { to: string; data: string; value?: strin
 
 export default function SwapPage() {
   const wallet = useWallet();
-  const [chainId, setChainId] = useState<ChainId>(56);
+  const [chainId, setChainId] = useState<ChainId>(1);
   const [runtimePresets, setRuntimePresets] = useState<{
     chainId: ChainId;
     tokens: { symbol: string; address: string; decimals: number; name?: string; logoUrl?: string | null }[];
   } | null>(null);
   const presets = useMemo(() => runtimePresets?.chainId === chainId ? runtimePresets.tokens : (TOKENS[chainId] || []), [runtimePresets, chainId]);
-  const [sellToken, setSellToken] = useState<string>(TOKENS[56][0].address);
-  const [buyToken, setBuyToken] = useState<string>(TOKENS[56][1].address);
+  const [sellToken, setSellToken] = useState<string>(TOKENS[1][0].address);
+  const [buyToken, setBuyToken] = useState<string>(TOKENS[1][1].address);
   const [sellAmountBase, setSellAmountBase] = useState<string>("0.01");
   const [slippage, setSlippage] = useState<string>("0.005");
 
   const [quote, setQuote] = useState<any | null>(null);
+  const [quoteMeta, setQuoteMeta] = useState<{ summary?: any; quoteId?: string; requestHash?: string } | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState<"idle" | "approving" | "swapping">("idle");
@@ -37,6 +38,7 @@ export default function SwapPage() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [slippagePanelOpen, setSlippagePanelOpen] = useState(false);
   const [arrowSpin, setArrowSpin] = useState(false);
+  const [step, setStep] = useState<"compose" | "review">("compose");
 
   const sellPreset = presets.find((t) => t.address.toLowerCase() === sellToken.toLowerCase());
   const buyPreset = presets.find((t) => t.address.toLowerCase() === buyToken.toLowerCase());
@@ -118,9 +120,11 @@ export default function SwapPage() {
     setSellToken(buyToken);
     setBuyToken(s);
     setQuote(null);
+    setQuoteMeta(null);
     setQuoteError(null);
     setAllowanceOk(null);
     setTxHash(null);
+    setStep("compose");
   }
 
   function slippagePctLabel() {
@@ -165,6 +169,7 @@ export default function SwapPage() {
       setLoading(true);
       setQuoteError(null);
       setQuote(null);
+      setQuoteMeta(null);
       const decimals = sellPreset?.decimals ?? 18;
       const sellAmount = toUnits(sellAmountBase, decimals);
       const body = {
@@ -175,14 +180,16 @@ export default function SwapPage() {
         slippagePercentage: Number(slippage),
         taker: wallet.address || undefined
       };
-      const data = await apiPost<QuoteResponse>("/v1/swap/quote", body);
-      if (data?.ok !== true || data.quote == null) throw new Error("Quote failed");
+      const data = await apiPost<any>("/v1/swap/quote", body);
+      if (data?.ok !== true || data.quote == null) throw new Error(data?.message || data?.error || "Swap failed");
       setQuote(data.quote);
+      setQuoteMeta({ summary: data.summary, quoteId: data.quoteId, requestHash: data.requestHash });
       setTxHash(null);
       setAllowanceOk(null);
       await refreshAllowance(data.quote);
+      setStep("review");
     } catch (e) {
-      setQuoteError(e instanceof Error ? e.message : "Quote failed");
+      setQuoteError(e instanceof Error ? e.message : "Swap failed");
     } finally {
       setLoading(false);
     }
@@ -244,7 +251,7 @@ export default function SwapPage() {
       return;
     }
     if (!quote) {
-      setQuoteError("Get a quote first");
+      setQuoteError("Press Swap to continue");
       return;
     }
     if (allowanceOk === false) {
@@ -262,10 +269,13 @@ export default function SwapPage() {
         buyToken,
         sellAmount,
         slippagePercentage: Number(slippage),
-        taker: wallet.address
+        taker: wallet.address,
+        // Prefer requestHash (stable) then quoteId (short TTL)
+        requestHash: quoteMeta?.requestHash || undefined,
+        quoteId: quoteMeta?.quoteId || undefined
       };
-      const data = await apiPost<ExecuteResponse>("/v1/swap/execute", body);
-      if (data?.ok !== true || !data.tx) throw new Error("Execute failed");
+      const data = await apiPost<any>("/v1/swap/execute", body);
+      if (data?.ok !== true || !data.tx) throw new Error(data?.message || data?.error || "Swap failed");
 
       const tx = data.tx;
       const reward = data.referralReward;
@@ -402,6 +412,36 @@ export default function SwapPage() {
                 <option value="42161">Arbitrum (42161)</option>
                 <option value="43114">Avalanche (43114)</option>
               </select>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-white/5 px-4 py-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-white/70">
+                <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full border ${step === "compose" ? "border-white/40 bg-white/10" : "border-white/15 bg-black/20"}`}>
+                  1
+                </span>
+                <span className={step === "compose" ? "text-white/90" : "text-white/55"}>Swap</span>
+                <span className="text-white/25">→</span>
+                <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full border ${step === "review" ? "border-white/40 bg-white/10" : "border-white/15 bg-black/20"}`}>
+                  2
+                </span>
+                <span className={step === "review" ? "text-white/90" : "text-white/55"}>Confirm</span>
+              </div>
+              {step === "review" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep("compose");
+                    setQuote(null);
+                    setQuoteMeta(null);
+                    setQuoteError(null);
+                    setAllowanceOk(null);
+                    setTxHash(null);
+                  }}
+                  className="text-xs font-semibold text-white/60 hover:text-white/85"
+                >
+                  Edit
+                </button>
+              ) : null}
             </div>
 
             <div className="mt-4">
@@ -551,7 +591,7 @@ export default function SwapPage() {
 
             <div className="mt-4 space-y-1 text-xs text-gray-400">
               <div>Price impact: {priceImpactDisplay()}</div>
-              <div>Routing: 0x Aggregator</div>
+              <div>Routing: {quoteMeta?.summary?.provider ? String(quoteMeta.summary.provider) : "—"}</div>
               <div>
                 Network fee:{" "}
                 {quote?.transaction?.gas ? `~${String(quote.transaction.gas)} gas` : "Estimated at send time"}
@@ -565,6 +605,31 @@ export default function SwapPage() {
 
             {quoteError ? <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200/95">{quoteError}</div> : null}
 
+            {step === "review" && quote ? (
+              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/80">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">Order</div>
+                <div className="space-y-1.5 text-xs text-white/70">
+                  <div>
+                    <span className="text-white/45">1.</span> You receive ≈{" "}
+                    <span className="font-semibold text-white/90">
+                      {formatUnits(quote.buyAmount, buyDecimals)} {buyPreset?.symbol}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-white/45">2.</span> Minimum received ≈{" "}
+                    <span className="font-semibold text-white/90">
+                      {quoteMeta?.summary?.minBuyAmount
+                        ? `${formatUnits(quoteMeta.summary.minBuyAmount, buyDecimals)} ${buyPreset?.symbol}`
+                        : "—"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-white/45">3.</span> Price impact: <span className="font-semibold text-white/90">{priceImpactDisplay()}</span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="mt-4">
               <button
                 type="button"
@@ -574,25 +639,25 @@ export default function SwapPage() {
                   (Boolean(quote?.allowanceTarget) && allowanceOk === null && Boolean(quote))
                 }
                 onClick={() => {
-                  if (!quote) void requestQuote();
+                  if (step === "compose") void requestQuote();
                   else if (quote.allowanceTarget && allowanceOk === false) void approveIfNeeded();
                   else void signAndSwap();
                 }}
                 className="w-full rounded-xl bg-gradient-to-r from-emerald-400 to-sky-500 py-3 text-center text-sm font-semibold text-[#04120c] shadow-lg shadow-emerald-500/15 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {loading
-                  ? "Fetching best price…"
+                  ? "Swapping…"
                   : sending === "approving"
                     ? "Approving…"
                     : sending === "swapping"
                       ? "Confirm in wallet…"
-                      : !quote
-                        ? "Get Best Price"
+                      : step === "compose"
+                        ? "Swap"
                         : quote.allowanceTarget && allowanceOk === false
                           ? "Approve token"
                           : quote.allowanceTarget && allowanceOk === null
                             ? "Checking allowance…"
-                            : "Swap Now"}
+                            : "Confirm Swap"}
               </button>
             </div>
 
