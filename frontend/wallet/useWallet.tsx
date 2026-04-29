@@ -4,7 +4,8 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useAccount, useDisconnect, useSwitchChain } from "wagmi";
 import type { Eip1193Provider } from "./provider";
-import { logout as apiLogout, me as apiMe } from "./auth";
+import { logout as apiLogout, me as apiMe, tryAttachStoredReferral } from "./auth";
+import { setRefCode } from "./referral";
 
 type WalletState = {
   status: "idle" | "connected" | "disconnected" | "unavailable";
@@ -39,6 +40,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [provider, setProvider] = useState<Eip1193Provider | null>(null);
   const [user, setUser] = useState<{ id?: string; address?: string } | null>(null);
   const wasConnectedRef = useRef(false);
+  const referralAttachAttemptedRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!connector) {
@@ -68,6 +70,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const u = new URL(window.location.href);
+    const ref = u.searchParams.get("ref");
+    if (ref) setRefCode(ref);
   }, []);
 
   /** After wagmi connects or account changes, re-sync backend session (cookie). */
@@ -108,6 +117,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, [status, address, user?.address, isConnecting, isReconnecting]);
+
+  useEffect(() => {
+    if (!user?.id || !user?.address) return;
+    const key = String(user.id);
+    if (referralAttachAttemptedRef.current === key) return;
+    referralAttachAttemptedRef.current = key;
+    void tryAttachStoredReferral();
+  }, [user?.id, user?.address]);
 
   /** RainbowKit / wagmi disconnect — clear API session so cookie matches “no wallet”. */
   useEffect(() => {

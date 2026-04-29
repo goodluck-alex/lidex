@@ -14,16 +14,25 @@ export async function getNonce(address: string, chainId: number) {
 
 export async function verify(address: string, chainId: number, nonce: string, signature: string) {
   const res = await apiPost<VerifyResponse>("/v1/auth/verify", { address, chainId, nonce, signature });
-  const refCode = getRefCode();
-  if (refCode) {
-    try {
-      await apiPost<any>("/v1/referral/attach", { refCode });
-      clearRefCode();
-    } catch {
-      // keep cookie; user can retry later
-    }
-  }
+  await tryAttachStoredReferral();
   return res;
+}
+
+export async function tryAttachStoredReferral() {
+  const refCode = getRefCode();
+  if (!refCode) return { ok: true as const, attached: false, reason: "no_ref_code" as const };
+  try {
+    await apiPost<any>("/v1/referral/attach", { refCode });
+    clearRefCode();
+    return { ok: true as const, attached: true };
+  } catch (e) {
+    // Keep the cookie on transient failures so a later authenticated session can retry.
+    return {
+      ok: false as const,
+      attached: false,
+      error: e instanceof Error ? e.message : "Referral attach failed",
+    };
+  }
 }
 
 export async function logout() {
