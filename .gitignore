@@ -1,0 +1,14 @@
+.DS_Store
+.env
+*.log
+node_modules/
+dist/
+coverage/
+.dart_tool/
+.flutter-plugins*
+.pub-cache/
+build/
+apps/mobile/android/key.properties
+apps/mobile/android/app/*.jks
+apps/mobile/ios/Runner/GoogleService-Info.plist
+apps/mobile/android/app/google-services.json

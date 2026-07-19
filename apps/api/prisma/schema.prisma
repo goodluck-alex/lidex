@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum WalletKind {
+  PERSONAL
+  EXCHANGE
+}
+
+enum Network {
+  BSC
+  ETHEREUM
+  POLYGON
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER
+  SWAP
+  STAKE
+  CLAIM
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderStatus {
+  PENDING
+  FILLED
+  CANCELLED
+  FAILED
+}
+
+enum RewardType {
+  CHECK_IN
+  REFERRAL
+  TRADE
+  STAKE
+  DEPOSIT
+  ADJUSTMENT
+}
+
+enum StakeStatus {
+  ACTIVE
+  UNSTAKING
+  COMPLETED
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  fullName       String
+  passwordHash   String
+  status         UserStatus      @default(PENDING)
+  emailVerifiedAt DateTime?
+  referralCode   String          @unique
+  referredById   String?
+  referredBy     User?           @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals      User[]          @relation("UserReferrals")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  sessions       DeviceSession[]
+  wallets        Wallet[]
+  exchangeAccount ExchangeAccount?
+  orders         TradeOrder[]
+  rewards        RewardLedger[]
+  stakes         Stake[]
+  notifications  Notification[]
+
+  @@index([referredById])
+}
+
+model DeviceSession {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String
+  deviceName       String?
+  ipAddress        String?
+  lastSeenAt       DateTime @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime @default(now())
+  @@index([userId, revokedAt])
+}
+
+model Wallet {
+  id           String       @id @default(uuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  address      String
+  kind         WalletKind   @default(PERSONAL)
+  network      Network      @default(BSC)
+  isPrimary    Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  transactions Transaction[]
+  @@unique([network, address])
+  @@index([userId])
+}
+
+model ExchangeAccount {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tradingBalance Decimal  @default(0) @db.Decimal(30, 8)
+  availableBalance Decimal @default(0) @db.Decimal(30, 8)
+  updatedAt      DateTime @updatedAt
+}
+
+model Transaction {
+  id          String            @id @default(uuid())
+  walletId    String?
+  wallet      Wallet?           @relation(fields: [walletId], references: [id])
+  type        TransactionType
+  status      TransactionStatus @default(PENDING)
+  network     Network           @default(BSC)
+  symbol      String
+  amount      Decimal           @db.Decimal(38, 18)
+  fee         Decimal?          @db.Decimal(38, 18)
+  fromAddress String?
+  toAddress   String?
+  txHash      String?           @unique
+  confirmations Int             @default(0)
+  idempotencyKey String?        @unique
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  @@index([walletId, createdAt])
+  @@index([status, network])
+}
+
+model TradeOrder {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  market      String
+  side        OrderSide
+  quantity    Decimal     @db.Decimal(38, 18)
+  quoteAmount Decimal     @db.Decimal(30, 8)
+  executedPrice Decimal?  @db.Decimal(30, 8)
+  status      OrderStatus @default(PENDING)
+  idempotencyKey String   @unique
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  @@index([userId, createdAt])
+}
+
+model RewardLedger {
+  id             String     @id @default(uuid())
+  userId         String
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           RewardType
+  points         Int
+  unlockedPoints Int        @default(0)
+  description    String
+  idempotencyKey String
+  createdAt      DateTime   @default(now())
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+}
+
+model Stake {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  amount        Decimal     @db.Decimal(38, 18)
+  apr           Decimal     @db.Decimal(8, 4)
+  rewardsEarned Decimal     @default(0) @db.Decimal(38, 18)
+  status        StakeStatus @default(ACTIVE)
+  txHash        String?     @unique
+  startedAt     DateTime    @default(now())
+  endsAt        DateTime?
+  updatedAt     DateTime    @updatedAt
+  @@index([userId, status])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  String
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, readAt, createdAt])
+}

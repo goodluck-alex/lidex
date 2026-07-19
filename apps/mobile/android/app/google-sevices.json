@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "347505219908",
+    "project_id": "lidex-c3f65",
+    "storage_bucket": "lidex-c3f65.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:347505219908:android:954f6ab33e829673499f11",
+        "android_client_info": {
+          "package_name": "com.lidex.network"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjxOogXZQkT1wKdZn7IQuKQxQfkFYg8jw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
